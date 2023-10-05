@@ -3,18 +3,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
-'''
-from monai.utils import set_determinism
-from monai.visualize import plot_2d_or_3d_image
-from monai.data import CacheDataset, DataLoader
-from monai.transforms import (
-    AddChannelD,
-    Compose,
-    LoadImageD,
-    ScaleIntensityD,
-    EnsureTypeD,
-)'''
-
 from model import Encoder, Decoder
 from glob import glob
 import random
