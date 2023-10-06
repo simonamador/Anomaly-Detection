@@ -2,32 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
 
 from model import Encoder, Decoder
-from glob import glob
-import random
+
+import numpy as np
 import os
+import argparse
 import time
 
-def paths(im_sz, z_dim):
-
-    date = time.strftime('%Y%m%d', time.localtime(time.time()))
-    results_path = '../Results'
-    if not os.path.exists(results_path):
-        os.mkdir(results_path)
-
-    folder_name = "/{0}_insize{1}_z{2}_denseAE_sigmoid".format(date, im_sz, z_dim)
-    tensorboard_path = results_path + folder_name + '/Tensorboard'
-    saved_model_path = results_path + folder_name + '/Saved_models/'
-    log_path = results_path + folder_name + '/log'
-    if not os.path.exists(results_path + folder_name):
-        os.mkdir(results_path + folder_name)
-        os.mkdir(tensorboard_path)
-        os.mkdir(saved_model_path)
-        os.mkdir(log_path)
-    return tensorboard_path, saved_model_path, log_path
-
-def validation(dataloader,encoder,decoder):
+def validation(ds,encoder,decoder):
     encoder.eval()
     decoder.eval()
 
@@ -35,28 +19,30 @@ def validation(dataloader,encoder,decoder):
     ae_loss = 0.0
 
     with torch.no_grad():
-        for data in dataloader:
-            img = data['im']
+        for data in ds:
+            img = data.to(device)
 
             z = encoder(img)
             x_recon = decoder(z)
 
             ed_loss = loss(x_recon, img)
             ae_loss += ed_loss
-        val_loss = ae_loss / len(dataloader)
+        val_loss = ae_loss / len(ds)
 
     return val_loss
 
-def train(trainloader,valloader,h,w,z_dim,device_ids,epochs):
-    encoder = Encoder(h,w,z_dim=z_dim)
-    decoder = Decoder(h,w,z_dim=z_dim)
+def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
+    encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
+    decoder = Decoder(h,w,z_dim=z_dim,model=mtype)
+
+    encoder = nn.DataParallel(encoder).to(device)
+    decoder = nn.DataParallel(decoder).to(device)
 
     loss = nn.MSELoss()
 
     optimizer = optim.Adam([{'params': encoder.parameters()},
                                {'params': decoder.parameters()}], lr=1e-4, weight_decay=1e-5)
 
-    tensor_path, model_path, log_path = paths(f'{h}-{w}',z_dim)
     writer = SummaryWriter(tensor_path)
 
     step = 0
@@ -70,8 +56,8 @@ def train(trainloader,valloader,h,w,z_dim,device_ids,epochs):
 
         ae_loss_epoch = 0.0
 
-        for data in trainloader:
-            img = data['im']
+        for data in train_ds:
+            img = data.to(device)
 
             z = encoder(img)
             x_recon = decoder(z)
@@ -88,11 +74,12 @@ def train(trainloader,valloader,h,w,z_dim,device_ids,epochs):
             
             step +=1
 
-        tr_loss = ae_loss_epoch / len(trainloader)
-        val_loss = validation(valloader, encoder, decoder)
+        tr_loss = ae_loss_epoch / len(train_ds)
+        val_loss = validation(val_ds, encoder, decoder)
 
         print('train_loss: {:.4f}'.format(tr_loss))
         print('val_loss: {:.4f}'.format(val_loss))
+
         writer.add_scalars('train and val loss per epoch', {'train_loss': tr_loss,
                                                             'val_loss': val_loss
                                                             }, epoch + 1)
@@ -122,3 +109,115 @@ def train(trainloader,valloader,h,w,z_dim,device_ids,epochs):
             print(f'saved best model in epoch: {epoch+1}')
     
     writer.close()
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--model_type',
+        dest='type',
+        choices=['default', 'residual', 'self-attention','full'],
+        required=True,
+        help='''
+        Type of model to train. Available options:
+        "defalut" Default VAE using convolution blocks
+        "residual: VAE which adds residual blocks between convolutions''')
+    
+    parser.add_argument('--model_view',
+        dest='view',
+        choices=['L', 'A', 'S'],
+        required=True,
+        help='''
+        The view of the image input for the model. Options:
+        "L" Left view
+        "A" Axial view
+        "S" Sagittal view''')
+    
+    parser.add_argument('--gpu',
+        dest='gpu',
+        choices=['0', '1', '2'],
+        required=True,
+        help='''
+        The GPU that will be used for training. Terminals have the following options:
+        Hanyang: 0, 1
+        Busan: 0, 1, 2
+        Sejong 0, 1, 2
+        Songpa 0, 1
+        Gangnam 0, 1
+        ''')
+    
+    parser.add_argument('--epochs',
+        dest='epochs',
+        default=1,
+        choices=range(1, 100),
+        required=False,
+        help='''
+        Number of epochs for training.
+        ''')
+
+    args = parser.parse_args()
+
+    print(args)
+    print('-'*25)
+
+
+    model = args.type
+    view = args.view
+    gpu = args.gpu
+    epochs = args.epochs
+    batch_size = 8
+    z_dim = 512
+
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"]=gpu
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    print('GPU was correctly assigned.')
+    print('-'*25)
+    print(device)
+
+    path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
+
+    source_path = path + 'healthy_dataset/' + view + '_view'
+
+    date = time.strftime('%Y%m%d', time.localtime(time.time()))
+    results_path = path + 'Results/'
+    if not os.path.exists(results_path):
+        os.mkdir(results_path)
+
+    folder_name = "/{0}_{1}_AE_{2}".format(view,model,date)
+    tensor_path = results_path + folder_name + '/Tensorboard'
+    model_path = results_path + folder_name + '/Saved_models/'
+    if not os.path.exists(results_path + folder_name):
+        os.mkdir(results_path + folder_name)
+        os.mkdir(tensor_path)
+        os.mkdir(model_path)
+    
+    print('Directories and paths are correctly initialized.')
+    print('-'*25)
+
+
+    train_set = np.load(source_path+'/train.npy')
+    val_set = np.load(source_path+'/test.npy')
+
+    h = train_set.shape[1]
+    w = train_set.shape[2]
+
+    train_set = np.expand_dims(train_set,axis=1)
+    train_set = torch.from_numpy(train_set).type(torch.float)
+    train_final = DataLoader(train_set, shuffle=True, batch_size=batch_size)
+
+    val_set = np.expand_dims(val_set,axis=1)
+    val_set = torch.from_numpy(val_set).type(torch.float)
+    val_final = DataLoader(val_set, shuffle=True, batch_size=batch_size, num_workers=12)
+
+    print('Data has been properly loaded.')
+    print('-'*25)
+
+    print(f"h={h}, w={w}")
+    print()
+    print('Beginning training.')
+    print('.'*50)
+
+    train(train_final,val_final,h,w,z_dim,model,epochs)

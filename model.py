@@ -1,24 +1,23 @@
-import warnings
 import torch
 import torch.nn as nn
 import torch.distributions as dist
 import math
 
 class Basic(nn.Module):
-    def __init__(self, input, output,transpose=None):
+    def __init__(self, input, output,transpose=False):
         super(Basic, self).__init__()
 
-        if transpose == None | transpose == False:
+        if transpose == False:
             self.conv_relu_norm = nn.Sequential(
                 nn.Conv2d(input, output, 3, padding=1),
                 nn.LeakyReLU(0.2),
-                nn.BatchNorm(output)
+                nn.BatchNorm2d(output)
             )
         else:
             self.conv_relu_norm = nn.Sequential(
                 nn.ConvTranspose2d(input, output, 3, padding=1),
                 nn.LeakyReLU(0.2),
-                nn.BatchNorm(output)
+                nn.BatchNorm2d(output)
             )
     def forward(self,x):
         return self.conv_relu_norm(x)
@@ -41,8 +40,8 @@ class ResUp(nn.Module):
     def __init__(self, input, output):
         super(ResUp, self).__init__()
         
-        self.basic1 = Basic(input,input,transpose=True)
-        self.basic2 = Basic(input,output,transpose=False)
+        self.basic1 = Basic(input,output,transpose=True)
+        self.basic2 = Basic(output,output,transpose=False)
 
         self.res = Basic(input,output,transpose=True)
 
@@ -61,10 +60,10 @@ class RESA(nn.Module):
 class Encoder(nn.Module):
     def __init__(
             self, 
-            h, 
-            w, 
+            h,
+            w,
             z_dim,
-            model='normal'
+            model='default'
         ):
 
         ch = 16
@@ -73,7 +72,7 @@ class Encoder(nn.Module):
 
         self.step0 = Basic(1,ch)
 
-        if model == 'normal':
+        if model == 'default':
             self.step1 = Basic(ch,ch * 2)
             self.step2 = Basic(ch * 2,ch * 4)
             self.step3 = Basic(ch * 4,ch * 8)
@@ -87,7 +86,7 @@ class Encoder(nn.Module):
                 self.step1 = SA(ch,ch * 2)
                 self.step2 = SA(ch * 2,ch * 4)
                 self.step3 = SA(ch * 4,ch * 8)
-            elif model == 'all':
+            elif model == 'full':
                 self.step1 = RESA(ch,ch * 2)
                 self.step2 = RESA(ch * 2,ch * 4)
             self.step3 = RESA(ch * 4,ch * 8)'''
@@ -117,7 +116,7 @@ class Decoder(nn.Module):
             h, 
             w, 
             z_dim, 
-            model='normal'
+            model='default'
             ):
         super(Decoder, self).__init__()
 
@@ -125,10 +124,10 @@ class Decoder(nn.Module):
         self.hshape = math.ceil(h / 16)
         self.wshape = math.ceil(w / 16)
 
-        self.z_develop = self.hshape * self.wshape * self.channel * 16
+        self.z_develop = self.hshape * self.wshape * self.ch * 16
         self.linear = nn.Linear(z_dim, self.z_develop)
 
-        if model == 'normal':
+        if model == 'default':
             self.step0 = Basic(self.ch* 16, self.ch * 8)
             self.step1 = Basic(self.ch* 8, self.ch * 4)
             self.step2 = Basic(self.ch * 4, self.ch * 2)
@@ -149,11 +148,11 @@ class Decoder(nn.Module):
         else:
             raise AttributeError("Model is not valid")
         
-        self.step4 = Basic(self.ch,1,1,transpose=True)
+        self.step4 = nn.Conv2d(self.ch, 1, 1)
 
     def forward(self,z):
         x = self.linear(z)
-        x = x.view(-1, self.ch * 16, self.hshape, self.wshape, self.zshape)
+        x = x.view(-1, self.ch * 16, self.hshape, self.wshape)
         x = self.step0(x)
         x = self.step1(x)
         x = self.step2(x)
