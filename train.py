@@ -33,7 +33,7 @@ def validation(ds,encoder,decoder):
 
 def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
     encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
-    decoder = Decoder(h,w,z_dim=z_dim,model=mtype)
+    decoder = Decoder(h,w,z_dim=int(z_dim/2),model=mtype)
 
     encoder = nn.DataParallel(encoder).to(device)
     decoder = nn.DataParallel(decoder).to(device)
@@ -155,6 +155,15 @@ if __name__ == '__main__':
         Number of epochs for training.
         ''')
 
+    parser.add_argument('--batch',
+        dest='batch',
+        default=1,
+        choices=range(1, 20),
+        required=False,
+        help='''
+        Number of batch size.
+        ''')
+
     args = parser.parse_args()
 
     print(args)
@@ -165,17 +174,17 @@ if __name__ == '__main__':
     view = args.view
     gpu = args.gpu
     epochs = args.epochs
-    batch_size = 8
+    batch_size = args.batch
     z_dim = 512
 
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]=gpu
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.cuda.empty_cache()
 
     print('GPU was correctly assigned.')
     print('-'*25)
-    print(device)
 
     path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
 
@@ -210,7 +219,7 @@ if __name__ == '__main__':
 
     val_set = np.expand_dims(val_set,axis=1)
     val_set = torch.from_numpy(val_set).type(torch.float)
-    val_final = DataLoader(val_set, shuffle=True, batch_size=batch_size, num_workers=12)
+    val_final = DataLoader(val_set, shuffle=True, batch_size=batch_size)
 
     print('Data has been properly loaded.')
     print('-'*25)

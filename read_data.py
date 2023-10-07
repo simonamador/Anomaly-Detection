@@ -2,15 +2,22 @@ import os
 import sys
 import csv
 
-data_list = sys.argv[1] #csv file with list of processed data ID  & corresponding scan date
+# Author: @simonamador
 
-source_directory = '/neuro/users/mri.team/fetal_mri/Data/' ##replace protocol
-# # Specify the destination directory
+# The following code an extraction of selected healthy-subject MRI images into a training folder
+
+# Input:
+data_list = sys.argv[1] #csv file with list of processed data
+
+# Path for extraction
+source_directory = '/neuro/users/mri.team/fetal_mri/Data/'
+# Path for allocation of images
 destination_directory = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/healthy_dataset/recon_img/'
 
 print('/'*10)
-print('Hola guapo ;) preparate para la copiacion')
+print('Allocation of images...')
 
+# Loop through the rows in the csv indicating the images to be extracted, in order to obtain the image id's to generate the paths
 locations = []
 with open(data_list, 'r') as csvfile:
     csvreader = csv.DictReader(csvfile)
@@ -20,8 +27,8 @@ with open(data_list, 'r') as csvfile:
         path_value = row['Path']
         locations.append((study_value, id_value, path_value))
 
+# Loop through the paths to extract the images and copy them into our folder. Only the reconstruction images are copied.
 step = 0
-
 for location in locations:
     study = location[0] + '_protocol'
     folder_id = location[1]
