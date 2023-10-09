@@ -40,16 +40,16 @@ for subject in n:
     print('-'*15)
     print(f"MRI {subject} loaded correctly.")
     for i in np.linspace(0,mri.shape[1]-1,mri.shape[1]):
-        img = mri[:116,int(i),:]
+        img = mri[:110,int(i),:]
         img = norm(img)
         if np.sum(img) > 5:
             A.append(img)
         if i < 125:
-            img = mri[:116,:158,int(i)]
+            img = mri[:110,:158,int(i)]
             img = norm(img)
             if np.sum(img) > 5:
                 S.append(img)
-            if i < 116:
+            if i < 110:
                 img = mri[int(i),:158,:]
                 img = norm(img)
                 if np.sum(img) > 5:

@@ -57,7 +57,6 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
         ae_loss_epoch = 0.0
 
         for data in train_ds:
-            print(f"step: {step}")
             img = data.to(device)
 
             z = encoder(img)

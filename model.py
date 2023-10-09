@@ -183,7 +183,7 @@ class Decoder(nn.Module):
 
 if __name__ == '__main__':
     from torchsummary import summary
-    emodel = Encoder(158, 126, 512,model='residual')
-    dmodel = Decoder(158, 126, 256,model='residual')
-    summary(emodel, (1, 158, 126), device='cpu')
+    emodel = Encoder(116, 126, 512,model='default')
+    dmodel = Decoder(116, 126, 256,model='default')
+    summary(emodel, (1, 116, 126), device='cpu')
     summary(dmodel, (1, 256), device='cpu')
