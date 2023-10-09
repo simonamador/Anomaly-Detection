@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
-import math
+from math import ceil
 # Author: @simonamador
 
 # The following code builds an autoencoder model for unsupervised learning applications in MRI anomaly detection.
@@ -14,18 +14,18 @@ import math
 # Basic class conducts a basic convolution-ReLU activation-batch normalization block.
 # Inputs: input channels, output channels. Optional: kernel size, stride, transpose (true or false, default is false).
 class Basic(nn.Module):
-    def __init__(self, input, output,k_size=3,stride=1,transpose=False):
+    def __init__(self, input, output, k_size=3,stride=1,padding=0,transpose=False):
         super(Basic, self).__init__()
 
         if transpose == False:
             self.conv_relu_norm = nn.Sequential(
-                nn.Conv2d(input, output, k_size, stride, padding=1),
+                nn.Conv2d(input, output, k_size, padding=padding,stride=stride),
                 nn.LeakyReLU(0.2),
                 nn.BatchNorm2d(output)
             )
         else:
             self.conv_relu_norm = nn.Sequential(
-                nn.ConvTranspose2d(input, output, k_size, stride, padding=1),
+                nn.ConvTranspose2d(input, output, k_size, padding=padding,stride=stride),
                 nn.LeakyReLU(0.2),
                 nn.BatchNorm2d(output)
             )
@@ -34,13 +34,13 @@ class Basic(nn.Module):
 
 # ResDown class conducts the residual block for the encoder.
 class ResDown(nn.Module):
-     def __init__(self, input, output):
+     def __init__(self, input, output,k_size,stride):
          super(ResDown, self).__init__()
          
-         self.basic1 = Basic(input,input)
-         self.basic2 = Basic(input,output,stride=2)
+         self.basic1 = Basic(input,input,padding=1)
+         self.basic2 = Basic(input,output,k_size=k_size,stride=stride)
 
-         self.res = Basic(input,output,stride=2)
+         self.res = Basic(input,output,k_size=k_size,stride=stride)
 
      def forward(self,x):
          residual = self.res(x)
@@ -49,13 +49,13 @@ class ResDown(nn.Module):
 
 # ResUp conducts the residual block for the decoder        
 class ResUp(nn.Module):
-    def __init__(self, input, output):
+    def __init__(self, input, output,k_size,stride):
         super(ResUp, self).__init__()
         
-        self.basic1 = Basic(input,output,k_size=4, stride=2, transpose=True)
-        self.basic2 = Basic(output,output)
+        self.basic1 = Basic(input,output,k_size=k_size, stride=stride, transpose=True)
+        self.basic2 = Basic(output,output,padding=1)
 
-        self.res = Basic(input,output,k_size=4, stride=2, transpose=True)
+        self.res = Basic(input,output,k_size=k_size, stride=stride, transpose=True)
 
     def forward(self,x):
         residual = self.res(x)
@@ -81,21 +81,21 @@ class Encoder(nn.Module):
         ):
 
         ch = 16
+        k_size = 4
+        stride = 2
 
         super(Encoder,self).__init__()
 
-        self.step0 = Basic(1,ch)
+        self.step0 = Basic(1,ch,k_size=k_size, stride=stride)
 
         if model == 'default':
-            self.step1 = Basic(ch,ch * 2)
-            self.step2 = Basic(ch * 2,ch * 4)
-            self.step3 = Basic(ch * 4,ch * 8)
-            self.step4 = Basic(ch * 8,ch * 16)
+            self.step1 = Basic(ch,ch * 2, k_size=k_size, stride=stride)
+            self.step2 = Basic(ch * 2,ch * 4, k_size=k_size, stride=stride)
+            self.step3 = Basic(ch * 4,ch * 8, k_size=k_size, stride=stride)
         elif model == 'residual':
-            self.step1 = ResDown(ch,ch * 2)
-            self.step2 = ResDown(ch * 2,ch * 4)
-            self.step3 = ResDown(ch * 4,ch * 8)
-            self.step4 = ResDown(ch * 8,ch * 16)
+            self.step1 = ResDown(ch,ch * 2, k_size=k_size, stride=stride)
+            self.step2 = ResDown(ch * 2,ch * 4, k_size=k_size, stride=stride)
+            self.step3 = ResDown(ch * 4,ch * 8, k_size=k_size, stride=stride)
             '''elif model == 'self-attention':
                 self.step1 = SA(ch,ch * 2)
                 self.step2 = SA(ch * 2,ch * 4)
@@ -107,21 +107,21 @@ class Encoder(nn.Module):
         else:
             raise AttributeError("Model is not valid")
         
-        self.flat_n = h * w * ch * 16
+        n_h = int(((h-k_size)/(stride**4)) - (k_size-1)/(stride**3) - (k_size-1)/(stride**2) - (k_size-1)/stride + 1)
+        n_w = int(((w-k_size)/(stride**4)) - (k_size-1)/(stride**3) - (k_size-1)/(stride**2) - (k_size-1)/stride + 1)
+        self.flat_n = n_h * n_w * ch * 8
         self.linear = nn.Linear(self.flat_n,z_dim)
     def forward(self,x):
         x = self.step0(x)
         x = self.step1(x)
         x = self.step2(x)
         x = self.step3(x)
-        x = self.step4(x)
-        print(x.shape)
         x = x.view(-1, self.flat_n)
-        print(x.shape)
         z_params = self.linear(x)
 
         mu, log_std = torch.chunk(z_params, 2, dim=1)
         std = torch.exp(log_std)
+
         z_dist = dist.Normal(mu, std)
         z_sample = z_dist.rsample()
         return z_sample
@@ -142,22 +142,22 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.ch = 16
-        self.hshape = h
-        self.wshape = w
+        self.k_size = 4
+        self.stride = 2
+        self.hshape = int(((h-self.k_size)/(self.stride**4)) - (self.k_size-1)/(self.stride**3) - (self.k_size-1)/(self.stride**2) - (self.k_size-1)/self.stride + 1)
+        self.wshape = int(((w-self.k_size)/(self.stride**4)) - (self.k_size-1)/(self.stride**3) - (self.k_size-1)/(self.stride**2) - (self.k_size-1)/self.stride + 1)
 
-        self.z_develop = self.hshape * self.wshape * self.ch * 16
+        self.z_develop = self.hshape * self.wshape * 8 * self.ch
         self.linear = nn.Linear(z_dim, self.z_develop)
 
         if model == 'default':
-            self.step0 = Basic(self.ch* 16, self.ch * 8)
-            self.step1 = Basic(self.ch* 8, self.ch * 4)
-            self.step2 = Basic(self.ch * 4, self.ch * 2)
-            self.step3 = Basic(self.ch * 2, self.ch)
+            self.step1 = Basic(self.ch* 8, self.ch * 4, k_size=self.k_size, stride=self.stride, transpose=True)
+            self.step2 = Basic(self.ch * 4, self.ch * 2, k_size=self.k_size, stride=self.stride, transpose=True)
+            self.step3 = Basic(self.ch * 2, self.ch, k_size=self.k_size, stride=self.stride, transpose=True)
         elif model == 'residual':
-            self.step0 = Basic(self.ch * 16, self.ch * 8)
-            self.step1 = ResUp(self.ch * 8, self.ch * 4)
-            self.step2 = ResUp(self.ch * 4, self.ch * 2)
-            self.step3 = ResUp(self.ch * 2, self.ch)
+            self.step1 = ResUp(self.ch * 8, self.ch * 4, k_size=self.k_size, stride=self.stride)
+            self.step2 = ResUp(self.ch * 4, self.ch * 2, k_size=self.k_size, stride=self.stride)
+            self.step3 = ResUp(self.ch * 2, self.ch, k_size=self.k_size, stride=self.stride)
             '''elif model == 'self-attention':
                 self.step1 = SA(ch,ch * 2)
                 self.step2 = SA(ch * 2,ch * 4)
@@ -169,12 +169,11 @@ class Decoder(nn.Module):
         else:
             raise AttributeError("Model is not valid")
         
-        self.step4 = nn.Conv2d(self.ch, 1, 1)
+        self.step4 = Basic(self.ch, 1, k_size=self.k_size, stride=self.stride, transpose=True)
 
     def forward(self,z):
         x = self.linear(z)
-        x = x.view(-1, self.ch * 16, self.hshape, self.wshape)
-        x = self.step0(x)
+        x = x.view(-1, self.ch * 8, self.hshape, self.wshape)
         x = self.step1(x)
         x = self.step2(x)
         x = self.step3(x)
@@ -184,7 +183,7 @@ class Decoder(nn.Module):
 
 if __name__ == '__main__':
     from torchsummary import summary
-    emodel = Encoder(159, 126, 512)
-    dmodel = Decoder(159, 126, 256)
-    summary(emodel, (1, 159, 126), device='cpu')
+    emodel = Encoder(158, 126, 512,model='residual')
+    dmodel = Decoder(158, 126, 256,model='residual')
+    summary(emodel, (1, 158, 126), device='cpu')
     summary(dmodel, (1, 256), device='cpu')

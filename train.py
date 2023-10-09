@@ -57,6 +57,7 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
         ae_loss_epoch = 0.0
 
         for data in train_ds:
+            print(f"step: {step}")
             img = data.to(device)
 
             z = encoder(img)
@@ -148,7 +149,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--epochs',
         dest='epochs',
-        default=1,
+        default=50,
         choices=range(1, 100),
         required=False,
         help='''
@@ -157,6 +158,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--batch',
         dest='batch',
+        type=int,
         default=1,
         choices=range(1, 20),
         required=False,
@@ -188,7 +190,7 @@ if __name__ == '__main__':
 
     path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
 
-    source_path = path + 'healthy_dataset/' + view + '_view'
+    source_path = path + 'healthy_dataset/' + view + '_view_e'
 
     date = time.strftime('%Y%m%d', time.localtime(time.time()))
     results_path = path + 'Results/'

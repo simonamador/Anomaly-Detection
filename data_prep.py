@@ -18,9 +18,9 @@ def norm(img):
 dir_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/healthy_dataset/'
 
 # Generate directories for saving training and testing datasets in each view 
-os.system('mkdir ' + dir_path + 'L_view')
-os.system('mkdir ' + dir_path + 'A_view')
-os.system('mkdir ' + dir_path + 'S_view')
+os.system('mkdir ' + dir_path + 'L_view_e')
+os.system('mkdir ' + dir_path + 'A_view_e')
+os.system('mkdir ' + dir_path + 'S_view_e')
 
 # Obtains the number of MRI .nii images in dataset
 n = os.listdir(dir_path+'recon_img')
@@ -32,7 +32,7 @@ A = []
 S = []
 
 # Loops for each MRI image, extract each slice and appends them in their corresponding view list.
-# Assumes the first dimmension corresponds to the left view, second to the axial, third to the sagittal.
+# Assumes the first dimmension corresponds to the left view, second to the axial, third to the superior.
 # Assumes the shape of the MRI images.
 for subject in n:
     raw = nib.load(dir_path + 'recon_img/' + subject)
@@ -40,14 +40,20 @@ for subject in n:
     print('-'*15)
     print(f"MRI {subject} loaded correctly.")
     for i in np.linspace(0,mri.shape[1]-1,mri.shape[1]):
-        img = mri[:,int(i),:]
-        A.append(norm(img))
-        if i < 126:
-            img = mri[:,:,int(i)]
-            S.append(norm(img))
-            if i < 117:
-                img = mri[int(i),:,:]
-                L.append(norm(img))
+        img = mri[:116,int(i),:]
+        img = norm(img)
+        if np.sum(img) > 5:
+            A.append(img)
+        if i < 125:
+            img = mri[:116,:158,int(i)]
+            img = norm(img)
+            if np.sum(img) > 5:
+                S.append(img)
+            if i < 116:
+                img = mri[int(i),:158,:]
+                img = norm(img)
+                if np.sum(img) > 5:
+                    L.append(img)
     print('All slices extracted correctly')
 
     
@@ -67,19 +73,19 @@ n_A = np.stack(A,axis=0)
 n_S = np.stack(S,axis=0)
 
 L_train = n_L[id_L[:floor(.8*len(L))]]
-np.save(dir_path+'L_view/train.npy',L_train)
+np.save(dir_path+'L_view_e/train.npy',L_train)
 L_test  = n_L[id_L[floor(.8*len(L)):]]
-np.save(dir_path+'L_view/test.npy',L_test)
+np.save(dir_path+'L_view_e/test.npy',L_test)
 print('Left view saved.')
 
 A_train = n_A[id_A[:floor(.8*len(A))]]
-np.save(dir_path+'A_view/train.npy',A_train)
+np.save(dir_path+'A_view_e/train.npy',A_train)
 A_test  = n_A[id_A[floor(.8*len(A)):]]
-np.save(dir_path+'A_view/test.npy',A_test)
+np.save(dir_path+'A_view_e/test.npy',A_test)
 print('Axial view saved.')
 
 S_train = n_S[id_S[:floor(.8*len(S))]]
-np.save(dir_path+'S_view/train.npy',S_train)
+np.save(dir_path+'S_view_e/train.npy',S_train)
 S_test  = n_S[id_S[floor(.8*len(S)):]]
-np.save(dir_path+'S_view/test.npy',S_test)
+np.save(dir_path+'S_view_e/test.npy',S_test)
 print('Sagittal view saved.')
