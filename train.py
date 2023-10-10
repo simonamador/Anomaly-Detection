@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 
 from model import Encoder, Decoder
@@ -43,10 +42,11 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
     optimizer = optim.Adam([{'params': encoder.parameters()},
                                {'params': decoder.parameters()}], lr=1e-4, weight_decay=1e-5)
 
-    writer = SummaryWriter(tensor_path)
+    writer = open(tensor_path,'w')
+    writer.write('Epoch, Train_loss, Val_loss'+'\n')
 
     step = 0
-    best_loss = 100
+    best_loss = 10000
 
     for epoch in range(epochs):
         print('-'*15)
@@ -69,20 +69,17 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
             optimizer.step()
 
             ae_loss_epoch += ed_loss.item()
-
-            writer.add_scalar('step_train_loss',ed_loss, step)
             
             step +=1
 
         tr_loss = ae_loss_epoch / len(train_ds)
         val_loss = validation(val_ds, encoder, decoder)
+        val_loss = val_loss.item()
 
         print('train_loss: {:.4f}'.format(tr_loss))
         print('val_loss: {:.4f}'.format(val_loss))
 
-        writer.add_scalars('train and val loss per epoch', {'train_loss': tr_loss,
-                                                            'val_loss': val_loss
-                                                            }, epoch + 1)
+        writer.write(str(epoch+1) + ', ' + str(tr_loss)+ ', ' + str(val_loss) + '\n')
 
         if (epoch + 1) % 50 == 0 or (epoch + 1) == epochs:
             torch.save({
@@ -192,16 +189,15 @@ if __name__ == '__main__':
     source_path = path + 'healthy_dataset/' + view + '_view_e'
 
     date = time.strftime('%Y%m%d', time.localtime(time.time()))
-    results_path = path + 'Results/'
+    results_path = path + 'Results'
     if not os.path.exists(results_path):
         os.mkdir(results_path)
 
     folder_name = "/{0}_{1}_AE_{2}".format(view,model,date)
-    tensor_path = results_path + folder_name + '/Tensorboard'
+    tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):
         os.mkdir(results_path + folder_name)
-        os.mkdir(tensor_path)
         os.mkdir(model_path)
     
     print('Directories and paths are correctly initialized.')

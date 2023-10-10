@@ -12,6 +12,7 @@ import nibabel as nib
 # Normalization function: Conducts min-max normalization of the images
 def norm(img):
     n_img = (img-np.min(img))/(np.max(img)-np.min(img))
+    n_img *= 255
     return n_img
 
 # Path of working directory

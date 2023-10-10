@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from collections import OrderedDict
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
-model_path = path + '/Results/A_default_AE_20231009/Saved_models/'
+model_path = path + '/Results/A_default_AE_20231010/Saved_models/'
 
 encoder = Encoder(110,126,512)
 decoder = Decoder(110,126,256)
