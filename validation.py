@@ -61,3 +61,5 @@ plt.imshow(input, cmap='gray')
 plt.show()
 plt.imshow(recon, cmap='gray')
 plt.show()
+
+print('Done.')
