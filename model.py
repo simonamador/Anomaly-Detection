@@ -69,6 +69,34 @@ class RESA(nn.Module):
     dum
 '''
 
+# Loss function based on SSIM loss function from Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004). Reducer is just
+# the mean of the images, instead of a Gaussian filter.
+
+class SSIM_Loss(nn.Module):
+    def __init__(self):
+        super(SSIM_Loss, self).__init__()
+
+    def forward(self, inputs, targets):
+        max = 254
+        c1 = (0.01*max)**2
+        c2 = (0.03*max)**2
+        ux = inputs.mean()
+        uy = targets.mean()
+
+        num0 = 2*ux*uy
+        den0 = ux**2+uy**2
+        lum = (num0+c1)/(den0+c1)
+
+        num1 = (inputs*targets).mean() *2
+        den1 = (inputs**2+targets**2).mean()
+        cs = (num1 - num0 + c2) / (den1 - den0 + c2)
+
+        ssim_val = lum*cs
+
+        loss = 1-ssim_val
+        return loss.mean()
+
+
 # Encoder class builds encoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the output z-parameters), model (the model type)
 class Encoder(nn.Module):

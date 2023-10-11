@@ -3,18 +3,17 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from model import Encoder, Decoder
+from model import Encoder, Decoder, SSIM_Loss
 
 import numpy as np
 import os
 import argparse
 import time
 
-def validation(ds,encoder,decoder):
+def validation(ds,encoder,decoder,loss):
     encoder.eval()
     decoder.eval()
 
-    loss = nn.MSELoss()
     ae_loss = 0.0
 
     with torch.no_grad():
@@ -30,14 +29,12 @@ def validation(ds,encoder,decoder):
 
     return val_loss
 
-def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
+def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss):
     encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
     decoder = Decoder(h,w,z_dim=int(z_dim/2),model=mtype)
 
     encoder = nn.DataParallel(encoder).to(device)
     decoder = nn.DataParallel(decoder).to(device)
-
-    loss = nn.MSELoss()
 
     optimizer = optim.Adam([{'params': encoder.parameters()},
                                {'params': decoder.parameters()}], lr=1e-4, weight_decay=1e-5)
@@ -73,7 +70,7 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs):
             step +=1
 
         tr_loss = ae_loss_epoch / len(train_ds)
-        val_loss = validation(val_ds, encoder, decoder)
+        val_loss = validation(val_ds, encoder, decoder, loss)
         val_loss = val_loss.item()
 
         print('train_loss: {:.4f}'.format(tr_loss))
@@ -145,11 +142,23 @@ if __name__ == '__main__':
     
     parser.add_argument('--epochs',
         dest='epochs',
+        type=int,
         default=50,
-        choices=range(1, 100),
+        choices=range(1, 1500),
         required=False,
         help='''
         Number of epochs for training.
+        ''')
+    
+    parser.add_argument('--loss',
+        dest='loss',
+        default='L2',
+        choices=['L2', 'SSIM'],
+        required=False,
+        help='''
+        Loss function:
+        L2 = Mean square error.
+        SSIM = Structural similarity index.
         ''')
 
     parser.add_argument('--batch',
@@ -173,6 +182,7 @@ if __name__ == '__main__':
     gpu = args.gpu
     epochs = args.epochs
     batch_size = args.batch
+    loss_type = args.loss
     z_dim = 512
 
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -192,8 +202,8 @@ if __name__ == '__main__':
     results_path = path + 'Results'
     if not os.path.exists(results_path):
         os.mkdir(results_path)
-
-    folder_name = "/{0}_{1}_AE_{2}".format(view,model,date)
+        
+    folder_name = "/{0}_{1}_AE_{2}_{3}".format(view,model,loss_type,date)
     tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):
@@ -203,6 +213,16 @@ if __name__ == '__main__':
     print('Directories and paths are correctly initialized.')
     print('-'*25)
 
+    print('Initializing loss function.')
+    print('-'*25)
+
+    if loss_type == 'L2':
+        loss = nn.MSELoss()
+    elif loss_type == 'SSIM':
+        loss = SSIM_Loss()
+
+    print('Loading data.')
+    print('-'*25)
 
     train_set = np.load(source_path+'/train.npy')
     val_set = np.load(source_path+'/test.npy')
@@ -226,4 +246,4 @@ if __name__ == '__main__':
     print('Beginning training.')
     print('.'*50)
 
-    train(train_final,val_final,h,w,z_dim,model,epochs)
+    train(train_final,val_final,h,w,z_dim,model,epochs,loss)

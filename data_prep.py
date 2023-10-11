@@ -45,7 +45,7 @@ for subject in n:
         img = norm(img)
         if np.sum(img) > 5:
             A.append(img)
-        if i < 125:
+        if i < 126:
             img = mri[:110,:158,int(i)]
             img = norm(img)
             if np.sum(img) > 5:
