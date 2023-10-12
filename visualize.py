@@ -1,23 +1,27 @@
 import pandas as pd
+import itertools
 import matplotlib.pyplot as plt
 import time
 import os
 import sys
 
-ids = [('L', 'L2'),('A', 'L2'),('S', 'L2'),('L', 'SSIM'),('A', 'SSIM'),('S', 'SSIM')]
+models = ['default', 'residual']
+views = ['L', 'A', 'S']
+loss = ['L2','SSIM']
+comb = [views,models,loss]
+ids = list(itertools.product(*comb))
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/Results/'
 
 res_date = str(sys.argv[1])
 
-date = time.strftime('%Y%m%d', time.localtime(time.time()))
-save_path = path+'training_curves_'+date
+save_path = path+'training_curves_'+res_date
 
 if not os.path.exists(save_path):
     os.mkdir(save_path)
 
-for view, loss in ids:
-    results_path = path + view + '_' + 'default_AE_'+loss+'_'+res_date+'/history.txt'
+for view, mode, loss in ids:
+    results_path = path + view + '_' + mode + '_AE_'+loss+'_'+res_date+'/history.txt'
     if os.path.exists(results_path):
         history = pd.read_csv (results_path, header=0)
 
@@ -25,25 +29,18 @@ for view, loss in ids:
         train_hist = [float(a) for a in history.iloc[:,1]]
         val_hist = [float(a) for a in history.iloc[:,2]]
 
-        tr_plt = plt.figure()
-        plt.plot(epoch, train_hist)
-        plt.title('Training curve '+view+' '+mode)
-        plt.xlabel('Epochs')
-        plt.ylabel('L2 Loss (MSE)')
-        plt.savefig(save_path+'/train_'+view+'_'+mode+'.png')
-
-        val_plt = plt.figure()
-        plt.plot(epoch, val_hist)
-        plt.title('Validation curve '+view+' '+mode)
-        plt.xlabel('Epochs')
-        plt.ylabel('L2 Loss (MSE)')
-        plt.savefig(save_path+'/val_'+view+'_'+mode+'.png')
 
         both_plt = plt.figure()
         plt.plot(epoch, train_hist, label='Training')
         plt.plot(epoch, val_hist, label='Validation')
         plt.legend(loc="upper left")
-        plt.title('Learning curve '+view+' '+mode)
+        plt.title('Learning curve '+view+' '+mode+' with '+loss+' loss')
         plt.xlabel('Epochs')
-        plt.ylabel('L2 Loss (MSE)')
-        plt.savefig(save_path+'/both_'+view+'_'+mode+'.png')
+        plt.ylabel(loss+' Loss')
+
+        if loss == 'SSIM':
+            plt.axis([0, 1000, 0, 1])
+        elif loss == 'L2':
+            plt.axis([0, 1000, 0, 8000])           
+
+        plt.savefig(save_path+'/both_'+view+'_'+mode+'_'+loss+'.png')

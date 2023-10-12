@@ -6,10 +6,10 @@ from torch.utils.data import DataLoader
 from collections import OrderedDict
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
-model_path = path + '/Results/L_default_AE_20231011/Saved_models/'
+model_path = path + '/Results/A_default_AE_SSIM_20231011/Saved_models/'
 
-encoder = Encoder(158,126,512)
-decoder = Decoder(158,126,256)
+encoder = Encoder(110,126,512)
+decoder = Decoder(110,126,256)
 
 cpe = torch.load(model_path+'encoder_best.pth')
 cpd = torch.load(model_path+'decoder_best.pth')
@@ -32,7 +32,7 @@ print('Encoder and Decoder loaded.')
 
 print('Loading new image')
 
-val_set = np.load(path+'healthy_dataset/L_view_e/test.npy')
+val_set = np.load(path+'healthy_dataset/A_view_e/test.npy')
 
 print(f'h = {val_set.shape[1]}, w = {val_set.shape[2]}')
 print('Reconstructing image')
@@ -45,8 +45,8 @@ images = iter(loader)
 img = next(images)
 img = next(images)
 img = next(images)
-# img = next(images)
-# img = next(images)
+img = next(images)
+img = next(images)
 
 z = encoder(img)
 recon = decoder(z)
