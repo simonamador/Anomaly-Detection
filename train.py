@@ -1,14 +1,52 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 
 from model import Encoder, Decoder, SSIM_Loss
+
+import nibabel as nib
 
 import numpy as np
 import os
 import argparse
 import time
+
+class img_dataset(Dataset):
+    def __init__(self, root_dir, view):
+        self.root_dir = root_dir
+        self.view = view
+
+    def __len__(self):
+        if self.view == 'L':
+            size = 110
+        elif self.view == 'A':
+            size = 158
+        else:
+            size = 126
+        return size
+    
+    def __getitem__(self, idx):
+        raw = nib.load(self.root_dir).get_fdata()
+        if self.view == 'L':
+            n_img = raw[idx,:158,:]
+        elif self.view == 'A':
+            n_img = raw[:110,idx,:]
+        else:
+            n_img = raw[:110,:158,idx]
+        
+        num = n_img-np.min(n_img)
+        den = np.max(n_img)-np.min(n_img)
+        out = np.zeros((n_img.shape[0], n_img.shape[1]))
+    
+        n_img = np.divide(num, den, out=out, where=den!=0)
+
+        n_img *= 255
+        n_img = np.expand_dims(n_img,axis=0)
+        n_img = torch.from_numpy(n_img).type(torch.float)
+
+        return n_img
+
 
 def validation(ds,encoder,decoder,loss):
     encoder.eval()
@@ -196,7 +234,7 @@ if __name__ == '__main__':
 
     path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
 
-    source_path = path + 'healthy_dataset/' + view + '_view_e'
+    source_path = path + 'healthy_dataset/'
 
     date = time.strftime('%Y%m%d', time.localtime(time.time()))
     results_path = path + 'Results'
@@ -224,22 +262,39 @@ if __name__ == '__main__':
     print('Loading data.')
     print('-'*25)
 
-    train_set = np.load(source_path+'/train.npy')
-    val_set = np.load(source_path+'/test.npy')
+    train_id = os.listdir(source_path+'train/')
+    test_id = os.listdir(source_path+'test/')
 
-    h = train_set.shape[1]
-    w = train_set.shape[2]
+    train_set = img_dataset(source_path+'train/'+train_id[0], view)
+    test_set = img_dataset(source_path+'test/'+test_id[0],view)
 
-    train_set = np.expand_dims(train_set,axis=1)
-    train_set = torch.from_numpy(train_set).type(torch.float)
-    train_final = DataLoader(train_set, shuffle=True, batch_size=batch_size)
+    for idx,image in enumerate(train_id):
+        if idx != 0:
+            train_path = source_path + 'train/' + image
+            tr_set = img_dataset(train_path,view)
+            train_set = torch.utils.data.ConcatDataset([train_set, tr_set])
 
-    val_set = np.expand_dims(val_set,axis=1)
-    val_set = torch.from_numpy(val_set).type(torch.float)
-    val_final = DataLoader(val_set, shuffle=True, batch_size=batch_size)
+    for idx,image in enumerate(test_id):
+        if idx != 0:
+            test_path = source_path + 'test/' + image
+            ts_set = img_dataset(test_path,view)
+            test_set = torch.utils.data.ConcatDataset([test_set, ts_set])
+
+    train_final = DataLoader(train_set, shuffle=True, batch_size=batch_size,num_workers=12)
+    val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
 
     print('Data has been properly loaded.')
     print('-'*25)
+
+    if view == 'L':
+        h = 158
+        w = 126
+    elif view == 'A':
+        h = 110
+        w = 126
+    else:
+        h = 110
+        w = 158
 
     print(f"h={h}, w={w}")
     print()
