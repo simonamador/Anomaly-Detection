@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+import numpy as np
 from math import ceil
 # Author: @simonamador
 
@@ -75,13 +76,28 @@ class RESA(nn.Module):
 class SSIM_Loss(nn.Module):
     def __init__(self):
         super(SSIM_Loss, self).__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    def gkern(self,l=11, sig=1.5):
+        ax = np.linspace((1 - l) / 2, (l - 1) / 2, l)
+        gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
+        kernel = np.outer(gauss, gauss)
+        k = kernel / np.sum(kernel)
+        return torch.from_numpy(k).type(torch.float).to(self.device)
+    
+    def filt(self,input,kernel):
+        kernel = kernel[None, None,:,:]
+        return nn.functional.conv2d(input,kernel,padding=1)
 
     def forward(self, inputs, targets):
         max = 254
         c1 = (0.01*max)**2
         c2 = (0.03*max)**2
-        ux = inputs.mean()
-        uy = targets.mean()
+
+        k = self.gkern()
+
+        ux = self.filt(inputs,k)
+        uy = self.filt(targets,k)
 
         num0 = 2*ux*uy
         den0 = ux**2+uy**2

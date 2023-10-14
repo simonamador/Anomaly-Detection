@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
-from model import Encoder, Decoder
+from model import Encoder, Decoder, SSIM_Loss
 
 import os
 import argparse
@@ -158,7 +158,14 @@ for idx,image in enumerate(images):
         input = slice.cpu().numpy().squeeze()
         
         if (idx == 0) & (id == 70):
-            fig = plt.figure()
+            '''fig = plt.figure()
+            fig.add_subplot(2,1,1)
+            plt.hist(input)
+            fig.add_subplot(2,1,2)
+            plt.hist(recon)
+            plt.show()'''
+
+            '''fig = plt.figure()
             fig.add_subplot(3,1,1)
             plt.imshow(input, cmap='gray')
             plt.axis('off')
@@ -168,7 +175,7 @@ for idx,image in enumerate(images):
             fig.add_subplot(3,1,3)
             plt.imshow((recon-input)**2, cmap='hot')
             plt.axis('off')
-            plt.show()
+            plt.show()'''
 
 error = np.mean(errors)
 print('-'*20)
