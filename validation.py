@@ -91,92 +91,105 @@ args = parser.parse_args()
 print(args)
 
 view = args.view
-model = args.model
+# model = args.model
 date = args.date
-ga = args.ga
+# ga = args.ga
+models = ['default_AE_L2','default_AE_SSIM']
+gas = range(22,40)
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
-model_path = path + '/Results/' + view + '_' + model + '_' + date + '/Saved_models/'
-
-if view == 'L':
-    w = 158
-    h = 126
-elif view == 'A':
-    w = 110
-    h = 126
-else:
-    w = 110
-    h = 158
-
-encoder = Encoder(w,h,512)
-decoder = Decoder(w,h,256)
-
-cpe = torch.load(model_path+'encoder_best.pth')
-cpd = torch.load(model_path+'decoder_best.pth')
-
-cpe_new = OrderedDict()
-cpd_new = OrderedDict()
-
-for k, v in cpe['encoder'].items():
-    name = k[7:]
-    cpe_new[name] = v
-
-for k, v in cpd['decoder'].items():
-    name = k[7:]
-    cpd_new[name] = v
-
-encoder.load_state_dict(cpe_new)
-decoder.load_state_dict(cpd_new)
-
-print('Encoder and Decoder loaded.')
 
 print('-'*20)
 print('Beginning validation:')
 print('-'*20)
 
+writer = open(path+'Results/GA_val_'+view+'_'+date+'.txt', 'w')
+writer.write('GA, L2 error, SSIM error'+'\n')
 
-images = os.listdir(path + 'healthy_dataset/recon-by-GA/GA_' + str(ga))
 loss = nn.MSELoss()
-errors = []
 
-for idx,image in enumerate(images):
-    print('-'*20)
-    print(f'Currently in image {idx} of {len(images)}')
-    val_path = path + 'healthy_dataset/recon-by-GA/GA_' + str(ga) + '/' + image
+for ga in gas: 
+    images = os.listdir(path + 'healthy_dataset/recon-by-GA/GA_' + str(ga))
+    m_error = []
+    for model in models:
 
-    val_set = val_dataset(val_path,view)
+        model_path = path + '/Results/' + view + '_' + model + '_' + date + '/Saved_models/'
 
-    loader = DataLoader(val_set, batch_size=1)
-    for id, slice in enumerate(loader):
-        z = encoder(slice)
-        recon = decoder(z)
+        if view == 'L':
+            w = 158
+            h = 126
+        elif view == 'A':
+            w = 110
+            h = 126
+        else:
+            w = 110
+            h = 158
 
-        error = loss(recon,slice)
-        errors.append(error.detach().numpy())
+        encoder = Encoder(w,h,512)
+        decoder = Decoder(w,h,256)
 
-        recon = recon.detach().cpu().numpy().squeeze()
-        input = slice.cpu().numpy().squeeze()
-        
-        if (idx == 0) & (id == 70):
-            '''fig = plt.figure()
-            fig.add_subplot(2,1,1)
-            plt.hist(input)
-            fig.add_subplot(2,1,2)
-            plt.hist(recon)
-            plt.show()'''
+        cpe = torch.load(model_path+'encoder_best.pth')
+        cpd = torch.load(model_path+'decoder_best.pth')
 
-            '''fig = plt.figure()
-            fig.add_subplot(3,1,1)
-            plt.imshow(input, cmap='gray')
-            plt.axis('off')
-            fig.add_subplot(3,1,2)
-            plt.imshow(recon, cmap='gray')
-            plt.axis('off')
-            fig.add_subplot(3,1,3)
-            plt.imshow((recon-input)**2, cmap='hot')
-            plt.axis('off')
-            plt.show()'''
+        cpe_new = OrderedDict()
+        cpd_new = OrderedDict()
 
-error = np.mean(errors)
+        for k, v in cpe['encoder'].items():
+            name = k[7:]
+            cpe_new[name] = v
+
+        for k, v in cpd['decoder'].items():
+            name = k[7:]
+            cpd_new[name] = v
+
+        encoder.load_state_dict(cpe_new)
+        decoder.load_state_dict(cpd_new)
+
+        errors = []
+        for idx,image in enumerate(images):
+            print('-'*20)
+            print(f'Currently in image {idx} of {len(images)}')
+            val_path = path + 'healthy_dataset/recon-by-GA/GA_' + str(ga) + '/' + image
+
+            val_set = val_dataset(val_path,view)
+
+            loader = DataLoader(val_set, batch_size=1)
+            for id, slice in enumerate(loader):
+                z = encoder(slice)
+                recon = decoder(z)
+
+                error = loss(recon,slice)
+                errors.append(error.detach().numpy())
+
+                recon = recon.detach().cpu().numpy().squeeze()
+                input = slice.cpu().numpy().squeeze()
+                
+                if (idx == 0) & (id == 70):
+                    '''fig = plt.figure()
+                    fig.add_subplot(2,1,1)
+                    plt.hist(input)
+                    fig.add_subplot(2,1,2)
+                    plt.hist(recon)
+                    plt.show()'''
+
+                    '''fig = plt.figure()
+                    fig.add_subplot(3,1,1)
+                    plt.imshow(input, cmap='gray')
+                    plt.axis('off')
+                    fig.add_subplot(3,1,2)
+                    plt.imshow(recon, cmap='gray')
+                    plt.axis('off')
+                    fig.add_subplot(3,1,3)
+                    plt.imshow((recon-input)**2, cmap='hot')
+                    plt.axis('off')
+                    plt.show()'''
+
+        error = np.mean(errors)
+        print('Model: ' + model)
+        print(f'Mean error: {error}')
+        m_error.append(error)
+        print('-'*20)
+    writer.write(str(ga)+', '+str(m_error[0])+', '+str(m_error[1])+'\n')
+writer.close()
 print('-'*20)
-print(f'Mean error: {error}')
+print('Finished.')

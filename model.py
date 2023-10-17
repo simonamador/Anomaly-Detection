@@ -78,7 +78,7 @@ class SSIM_Loss(nn.Module):
         super(SSIM_Loss, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    def gkern(self,l=11, sig=1.5):
+    def gkern(self,l=5, sig=1):
         ax = np.linspace((1 - l) / 2, (l - 1) / 2, l)
         gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
         kernel = np.outer(gauss, gauss)
@@ -86,7 +86,7 @@ class SSIM_Loss(nn.Module):
         return torch.from_numpy(k).type(torch.float).to(self.device)
     
     def filt(self,input,kernel):
-        kernel = kernel[None, None,:,:]
+        kernel = kernel[None,None,:,:]
         return nn.functional.conv2d(input,kernel,padding=1)
 
     def forward(self, inputs, targets):

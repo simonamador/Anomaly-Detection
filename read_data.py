@@ -30,7 +30,7 @@ print(locations)
 for location in locations:
     # Construct source and destination paths
     source_path = source_directory  + location 
-    os.system('cp -r ' + source_path + ' ' + destination_directory)
+    os.system('cp -r' + source_path + ' ' + destination_directory)
 
 print(source_path)
 print(destination_directory)
