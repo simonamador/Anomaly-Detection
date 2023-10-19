@@ -203,7 +203,7 @@ if __name__ == '__main__':
         dest='batch',
         type=int,
         default=1,
-        choices=range(1, 20),
+        choices=range(1, 512),
         required=False,
         help='''
         Number of batch size.
@@ -241,7 +241,7 @@ if __name__ == '__main__':
     if not os.path.exists(results_path):
         os.mkdir(results_path)
         
-    folder_name = "/{0}_{1}_AE_{2}_{3}".format(view,model,loss_type,date)
+    folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}".format(view,model,loss_type,batch_size,date)
     tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):

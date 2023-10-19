@@ -103,7 +103,7 @@ print('-'*20)
 print('Beginning validation:')
 print('-'*20)
 
-writer = open(path+'Results/GA_val_'+view+'_'+date+'.txt', 'w')
+writer = open(path+'Results/GA_val_'+view+'_'+date+'_2.txt', 'w')
 writer.write('GA, L2 error, SSIM error'+'\n')
 
 loss = nn.MSELoss()
@@ -153,7 +153,7 @@ for ga in gas:
 
             val_set = val_dataset(val_path,view)
 
-            loader = DataLoader(val_set, batch_size=1)
+            loader = DataLoader(val_set, batch_size=8, shuffle=True)
             for id, slice in enumerate(loader):
                 z = encoder(slice)
                 recon = decoder(z)
@@ -164,25 +164,25 @@ for ga in gas:
                 recon = recon.detach().cpu().numpy().squeeze()
                 input = slice.cpu().numpy().squeeze()
                 
-                if (idx == 0) & (id == 70):
-                    '''fig = plt.figure()
+                if (idx == 0) & (id == 10):
+                    fig = plt.figure()
                     fig.add_subplot(2,1,1)
-                    plt.hist(input)
+                    plt.hist(input[0])
                     fig.add_subplot(2,1,2)
-                    plt.hist(recon)
-                    plt.show()'''
+                    plt.hist(recon[0])
+                    plt.show()
 
-                    '''fig = plt.figure()
+                    fig = plt.figure()
                     fig.add_subplot(3,1,1)
-                    plt.imshow(input, cmap='gray')
+                    plt.imshow(input[0], cmap='gray')
                     plt.axis('off')
                     fig.add_subplot(3,1,2)
-                    plt.imshow(recon, cmap='gray')
+                    plt.imshow(recon[0], cmap='gray')
                     plt.axis('off')
                     fig.add_subplot(3,1,3)
-                    plt.imshow((recon-input)**2, cmap='hot')
+                    plt.imshow((recon[0]-input[0])**2, cmap='hot')
                     plt.axis('off')
-                    plt.show()'''
+                    plt.show()
 
         error = np.mean(errors)
         print('Model: ' + model)

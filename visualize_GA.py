@@ -19,7 +19,7 @@ width = 0.25
 x = np.arange(22,40,1)
 
 for view in views:
-    ga_path = path+'GA_val_'+view+'_'+res_date+'.txt'
+    ga_path = path+'GA_val_'+view+'_'+res_date+'_2.txt'
     if os.path.exists(ga_path):
         ga_e = pd.read_csv(ga_path,header=0)
         gw = [int(a) for a in ga_e.iloc[:,0]]
