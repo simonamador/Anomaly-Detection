@@ -70,14 +70,15 @@ class RESA(nn.Module):
     dum
 '''
 
-# Loss function based on SSIM loss function from Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004). Reducer is just
-# the mean of the images, instead of a Gaussian filter.
+# Loss function based on SSIM loss function from Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004). Reducer
+# is a gaussian filter.
 
 class SSIM_Loss(nn.Module):
     def __init__(self):
         super(SSIM_Loss, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    # Design the gaussian kernel (size is 5 instead of 11 from paper, as well as sig being 1 instead of 1.5)
     def gkern(self,l=5, sig=1):
         ax = np.linspace((1 - l) / 2, (l - 1) / 2, l)
         gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
@@ -85,10 +86,12 @@ class SSIM_Loss(nn.Module):
         k = kernel / np.sum(kernel)
         return torch.from_numpy(k).type(torch.float).to(self.device)
     
+    # Apply gaussian filter by conv
     def filt(self,input,kernel):
         kernel = kernel[None,None,:,:]
         return nn.functional.conv2d(input,kernel,padding=1)
 
+    # SSIM loss defined as 1 - SSIM, following the equation for SSIM
     def forward(self, inputs, targets):
         max = 254
         c1 = (0.01*max)**2
@@ -170,7 +173,7 @@ class Encoder(nn.Module):
         z_sample = z_dist.rsample()
         return z_sample
    
-# Decode class builds decoder model depending on the model type.
+# Decoder class builds decoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the input z-vector), model (the model type) 
 
 # Note: z_dim in Encoder is not the same as z_dim in Decoder, as the z_vector has half the size of the z_parameters.

@@ -1,51 +1,15 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import torch.nn as nn
-from model import Encoder, Decoder, SSIM_Loss
-
+from model import Encoder, Decoder
+from train import img_dataset
 import os
 import argparse
 import numpy as np
-import nibabel as nib
 
 from collections import OrderedDict
-
+ 
 import matplotlib.pyplot as plt
-
-class val_dataset(Dataset):
-    def __init__(self, root_dir, view):
-        self.root_dir = root_dir
-        self.view = view
-
-    def __len__(self):
-        if self.view == 'L':
-            size = 110
-        elif self.view == 'A':
-            size = 158
-        else:
-            size = 126
-        return size
-    
-    def __getitem__(self, idx):
-        raw = nib.load(self.root_dir).get_fdata()
-        if self.view == 'L':
-            n_img = raw[idx,:158,:]
-        elif self.view == 'A':
-            n_img = raw[:110,idx,:]
-        else:
-            n_img = raw[:110,:158,idx]
-        
-        num = n_img-np.min(n_img)
-        den = np.max(n_img)-np.min(n_img)
-        out = np.zeros((n_img.shape[0], n_img.shape[1]))
-    
-        n_img = np.divide(num, den, out=out, where=den!=0)
-
-        n_img *= 255
-        n_img = np.expand_dims(n_img,axis=0)
-        n_img = torch.from_numpy(n_img).type(torch.float)
-
-        return n_img
 
 parser = argparse.ArgumentParser()
 
@@ -151,7 +115,7 @@ for ga in gas:
             print(f'Currently in image {idx} of {len(images)}')
             val_path = path + 'healthy_dataset/recon-by-GA/GA_' + str(ga) + '/' + image
 
-            val_set = val_dataset(val_path,view)
+            val_set = img_dataset(val_path,view)
 
             loader = DataLoader(val_set, batch_size=8, shuffle=True)
             for id, slice in enumerate(loader):
