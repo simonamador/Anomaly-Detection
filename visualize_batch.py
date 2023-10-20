@@ -4,6 +4,8 @@ import os
 import sys
 import numpy as np
 
+# Author: @simonamador
+
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/Results/'
 
 view = 'L'

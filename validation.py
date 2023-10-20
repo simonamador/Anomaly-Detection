@@ -11,6 +11,8 @@ from collections import OrderedDict
  
 import matplotlib.pyplot as plt
 
+# Author: @simonamador
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--view',

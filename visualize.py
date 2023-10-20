@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import os
 import sys
 
+# Author: @simonamador
+
 models = ['default', 'residual']
 views = ['L', 'A', 'S']
 loss = ['L2','SSIM']

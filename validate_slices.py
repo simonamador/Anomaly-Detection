@@ -12,12 +12,10 @@ from collections import OrderedDict
 
 # Author: @simonamador
 
-batches = [1,8,16,32,64]
-view = 'L'
-date = str(sys.argv[1])
-model = 'default_AE_L2'
-
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
+
+views = ['L', 'A', 'S']
+date = str(sys.argv[1])
 
 print('-'*20)
 print('Beginning validation:')
@@ -25,21 +23,22 @@ print('-'*20)
 
 images = os.listdir(path + 'healthy_dataset/test/')
 
-writer = open(path+'Results/Batch_size_'+view+'_'+date+'.txt', 'w')
-
-for batch in batches:
+for view in views:
     loss = nn.MSELoss()
-    model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
+    model_path = path + '/Results/' + view + '_default_AE_L2_' + date + '/Saved_models/'
 
     if view == 'L':
         w = 158
         h = 126
+        l = 110
     elif view == 'A':
         w = 110
         h = 126
+        l = 158
     else:
         w = 110
         h = 158
+        l = 126
 
     encoder = Encoder(w,h,512)
     decoder = Decoder(w,h,256)
@@ -61,9 +60,16 @@ for batch in batches:
     encoder.load_state_dict(cpe_new)
     decoder.load_state_dict(cpd_new)
 
+    id_list = np.linspace(1,l,l)
+    ids = "subject"
+    for n in id_list:
+        ids = ids+', p'+(str(int(n)))
+
     errors = []
-    writer.write("Batch size "+str(batch)+", ")
-    
+
+    writer = open(path+'Results/Slice_validation_'+view+'_'+date+'.txt', 'w')
+    writer.write(ids+"\n")
+
     for idx,image in enumerate(images):
         print('-'*20)
         print(f'Currently in image {idx+1} of {len(images)}')
@@ -72,20 +78,19 @@ for batch in batches:
         val_set = img_dataset(val_path,view)
 
         loader = DataLoader(val_set, batch_size=1)
+
+        writer.write(str(int(idx+1)))
+
         for id, slice in enumerate(loader):
             z = encoder(slice)
             recon = decoder(z)
 
             error = loss(recon,slice)
-            errors.append(error.detach().numpy())
+            error = error.detach().numpy()
+            writer.write(", "+str(error))
 
-            recon = recon.detach().cpu().numpy().squeeze()
-            input = slice.cpu().numpy().squeeze()
-
-        error = np.mean(errors)
         print('-'*20)
-        writer.write(", "+str(error))
-    writer.write("\n")
+        writer.write("\n")
 writer.close()
 print('-'*20)
 print('Finished.')
