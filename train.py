@@ -182,7 +182,7 @@ if __name__ == '__main__':
         dest='epochs',
         type=int,
         default=50,
-        choices=range(1, 1500),
+        choices=range(1, 15000),
         required=False,
         help='''
         Number of epochs for training.
