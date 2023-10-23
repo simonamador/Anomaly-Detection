@@ -1,47 +1,89 @@
-import pandas as pd
-import itertools
+import torch
+from torch.utils.data import DataLoader, Subset
+import torch.nn as nn
+from model import Encoder, Decoder
+from train import img_dataset
 import matplotlib.pyplot as plt
+
 import os
 import sys
+import numpy as np
+
+from collections import OrderedDict
 
 # Author: @simonamador
 
-models = ['default', 'residual']
-views = ['L', 'A', 'S']
-loss = ['L2','SSIM']
-comb = [views,models,loss]
-ids = list(itertools.product(*comb))
+batch = 64
+view = 'A'
+date = str(sys.argv[1])
+anomaly = str(sys.argv[2])
+model = 'default_AE_L2'
 
-path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/Results/'
+path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
 
-res_date = str(sys.argv[1])
+print('-'*20)
+print('Beginning validation:')
+print('-'*20)
 
-save_path = path+'training_curves_'+res_date
+if anomaly == 'VM':
+    images = os.listdir(path + 'Ventriculomegaly/recon_img/')
 
-if not os.path.exists(save_path):
-    os.mkdir(save_path)
+model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
 
-for view, mode, loss in ids:
-    results_path = path + view + '_' + mode + '_AE_'+loss+'_'+res_date+'/history.txt'
-    if os.path.exists(results_path):
-        history = pd.read_csv (results_path, header=0)
+if view == 'L':
+    w = 158
+    h = 126
+    ids = np.arange(start=12,stop=99)
+elif view == 'A':
+    w = 110
+    h = 126
+    ids = np.arange(start=16,stop=143)
+else:
+    w = 110
+    h = 158
+    ids = np.arange(start=12,stop=115)
 
-        epoch = [int(a) for a in history.iloc[:,0]]
-        train_hist = [float(a) for a in history.iloc[:,1]]
-        val_hist = [float(a) for a in history.iloc[:,2]]
+encoder = Encoder(w,h,512)
+decoder = Decoder(w,h,256)
 
+cpe = torch.load(model_path+'encoder_best.pth')
+cpd = torch.load(model_path+'decoder_best.pth')
 
-        both_plt = plt.figure()
-        plt.plot(epoch, train_hist, label='Training')
-        plt.plot(epoch, val_hist, label='Validation')
-        plt.legend(loc="upper left")
-        plt.title('Learning curve '+view+' '+mode+' with '+loss+' loss')
-        plt.xlabel('Epochs')
-        plt.ylabel(loss+' Loss')
+cpe_new = OrderedDict()
+cpd_new = OrderedDict()
 
-        if loss == 'SSIM':
-            plt.axis([0, 1000, 0, 1])
-        elif loss == 'L2':
-            plt.axis([0, 1000, 0, 8000])           
+for k, v in cpe['encoder'].items():
+    name = k[7:]
+    cpe_new[name] = v
 
-        plt.savefig(save_path+'/both_'+view+'_'+mode+'_'+loss+'.png')
+for k, v in cpd['decoder'].items():
+    name = k[7:]
+    cpd_new[name] = v
+
+encoder.load_state_dict(cpe_new)
+decoder.load_state_dict(cpd_new)
+
+for idx,image in enumerate(images):
+    print('-'*20)
+    print(f'Currently in image {idx+1} of {len(images)}')
+    val_path = path + 'Ventriculomegaly/recon_img/' + image
+
+    val_set = img_dataset(val_path,view)
+
+    val_set = Subset(val_set,ids)
+
+    loader = DataLoader(val_set, batch_size=1)
+    for id, slice in enumerate(loader):
+        z = encoder(slice)
+        recon = decoder(z)
+
+        recon = recon.detach().cpu().numpy().squeeze()
+        input = slice.cpu().numpy().squeeze()
+        error = (recon-input)**2
+        if id == 60:
+            fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+            ax1.imshow(input, cmap = "gray")
+            ax2.imshow(recon, cmap = "gray")
+            ax3.imshow(error, cmap = "hot")
+            plt.show()
+    print('-'*20)

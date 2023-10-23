@@ -12,9 +12,10 @@ from collections import OrderedDict
 
 # Author: @simonamador
 
-batches = [32,64]
-view = 'L'
+batch = 64
+views = ['L','A','S']
 date = str(sys.argv[1])
+anomaly = str(sys.argv[2])
 model = 'default_AE_L2'
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
@@ -23,11 +24,11 @@ print('-'*20)
 print('Beginning validation:')
 print('-'*20)
 
-images = os.listdir(path + 'healthy_dataset/test/')
+if anomaly == 'VM':
+    images = os.listdir(path + 'Ventriculomegaly/recon_img/')
+writer = open(path+'Results/Val-anomaly_'+anomaly+'_'+date+'cropped.txt', 'w')
 
-writer = open(path+'Results/Batch_size_'+view+'_'+date+'cropped.txt', 'w')
-
-for batch in batches:
+for view in views:
     loss = nn.MSELoss()
     model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
 
@@ -65,12 +66,12 @@ for batch in batches:
     decoder.load_state_dict(cpd_new)
 
     errors = []
-    writer.write("Batch size "+str(batch)+", ")
+    writer.write("view "+view+", ")
     
     for idx,image in enumerate(images):
         print('-'*20)
         print(f'Currently in image {idx+1} of {len(images)}')
-        val_path = path + 'healthy_dataset/test' + '/' + image
+        val_path = path + 'Ventriculomegaly/recon_img/' + image
 
         val_set = img_dataset(val_path,view)
 

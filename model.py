@@ -7,7 +7,7 @@ from math import ceil
 
 # The following code builds an autoencoder model for unsupervised learning applications in MRI anomaly detection.
 # The model can be build in 4 types:
-# * Default: 5 2d Convolutions followed by a flattening and linear transformation
+# * Default: 2d Convolutions followed by a flattening and linear transformation
 # * Residual: Includes residual blocks in between convolutions
 # * Self-attention: Includes self-attention modules in between convolutions
 # * Full: Includes both residual blocks and self-attention modules in between convolutions

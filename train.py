@@ -37,12 +37,12 @@ class img_dataset(Dataset):
     def __getitem__(self, idx):
         raw = nib.load(self.root_dir).get_fdata()
         if self.view == 'L':
-            n_img = raw[idx,:158,:]
+            n_img = raw[idx,:158,:]    
         elif self.view == 'A':
             n_img = raw[:110,idx,:]
         else:
             n_img = raw[:110,:158,idx]
-        
+
         num = n_img-np.min(n_img)
         den = np.max(n_img)-np.min(n_img)
         out = np.zeros((n_img.shape[0], n_img.shape[1]))
