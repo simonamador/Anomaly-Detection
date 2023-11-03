@@ -14,10 +14,10 @@ from collections import OrderedDict
 # Author: @simonamador
 
 batch = 64
-view = 'A'
+view = 'L'
 date = str(sys.argv[1])
 anomaly = str(sys.argv[2])
-model = 'default_AE_L2'
+model = 'default_AE_MS_SSIM'
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
 
@@ -27,21 +27,25 @@ print('-'*20)
 
 if anomaly == 'VM':
     images = os.listdir(path + 'Ventriculomegaly/recon_img/')
+    extract_path = path + 'Ventriculomegaly/recon_img/'
+elif anomaly == 'healthy':
+    images = os.listdir(path + 'healthy_dataset/test/')
+    extract_path = path + 'healthy_dataset/test/'
 
-model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
+model_path = path + '/Results/Relu_' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
 
 if view == 'L':
     w = 158
     h = 126
-    ids = np.arange(start=12,stop=99)
+    ids = np.arange(start=40,stop=70)
 elif view == 'A':
     w = 110
     h = 126
-    ids = np.arange(start=16,stop=143)
+    ids = np.arange(start=64,stop=94)
 else:
     w = 110
     h = 158
-    ids = np.arange(start=12,stop=115)
+    ids = np.arange(start=48,stop=78)
 
 encoder = Encoder(w,h,512)
 decoder = Decoder(w,h,256)
@@ -66,24 +70,33 @@ decoder.load_state_dict(cpd_new)
 for idx,image in enumerate(images):
     print('-'*20)
     print(f'Currently in image {idx+1} of {len(images)}')
-    val_path = path + 'Ventriculomegaly/recon_img/' + image
+    val_path = extract_path + image
 
     val_set = img_dataset(val_path,view)
 
     val_set = Subset(val_set,ids)
 
     loader = DataLoader(val_set, batch_size=1)
-    for id, slice in enumerate(loader):
-        z = encoder(slice)
-        recon = decoder(z)
 
-        recon = recon.detach().cpu().numpy().squeeze()
-        input = slice.cpu().numpy().squeeze()
-        error = (recon-input)**2
-        if id == 60:
-            fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-            ax1.imshow(input, cmap = "gray")
-            ax2.imshow(recon, cmap = "gray")
-            ax3.imshow(error, cmap = "hot")
+    loss = nn.MSELoss(reduction="none")
+    for id, slice in enumerate(loader):
+        if id == 20:
+            z = encoder(slice)
+            recon = decoder(z)
+
+            error = loss(recon,slice)
+            print(torch.mean(error))
+            
+            fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
+            ax1.imshow(slice.detach().cpu().numpy().squeeze(), cmap = "gray")
+            ax1.axis("off")
+            ax2.imshow(recon.detach().cpu().numpy().squeeze(), cmap = "gray")
+            ax2.axis("off")
+            ax3.hist(slice.detach().cpu().numpy().squeeze())
+            ax4.hist(recon.detach().cpu().numpy().squeeze())
+            ax5.imshow(error.detach().cpu().numpy().squeeze(), cmap = "hot")
+            ax5.axis("off")
+            ax6.imshow(error.detach().cpu().numpy().squeeze(), cmap = "hot")
+            ax6.axis("off")
             plt.show()
     print('-'*20)

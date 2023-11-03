@@ -70,52 +70,6 @@ class RESA(nn.Module):
     dum
 '''
 
-# Loss function based on SSIM loss function from Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004). Reducer
-# is a gaussian filter.
-
-class SSIM_Loss(nn.Module):
-    def __init__(self):
-        super(SSIM_Loss, self).__init__()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # Design the gaussian kernel (size is 5 instead of 11 from paper, as well as sig being 1 instead of 1.5)
-    def gkern(self,l=5, sig=1):
-        ax = np.linspace((1 - l) / 2, (l - 1) / 2, l)
-        gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
-        kernel = np.outer(gauss, gauss)
-        k = kernel / np.sum(kernel)
-        return torch.from_numpy(k).type(torch.float).to(self.device)
-    
-    # Apply gaussian filter by conv
-    def filt(self,input,kernel):
-        kernel = kernel[None,None,:,:]
-        return nn.functional.conv2d(input,kernel,padding=1)
-
-    # SSIM loss defined as 1 - SSIM, following the equation for SSIM
-    def forward(self, inputs, targets):
-        max = 254
-        c1 = (0.01*max)**2
-        c2 = (0.03*max)**2
-
-        k = self.gkern()
-
-        ux = self.filt(inputs,k)
-        uy = self.filt(targets,k)
-
-        num0 = 2*ux*uy
-        den0 = ux**2+uy**2
-        lum = (num0+c1)/(den0+c1)
-
-        num1 = (inputs*targets).mean() *2
-        den1 = (inputs**2+targets**2).mean()
-        cs = (num1 - num0 + c2) / (den1 - den0 + c2)
-
-        ssim_val = lum*cs
-
-        loss = 1-ssim_val
-        return loss.mean()
-
-
 # Encoder class builds encoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the output z-parameters), model (the model type)
 class Encoder(nn.Module):
@@ -217,6 +171,7 @@ class Decoder(nn.Module):
             raise AttributeError("Model is not valid")
         
         self.step4 = Basic(self.ch, 1, k_size=self.k_size, stride=self.stride, transpose=True)
+        self.relu = nn.ReLU()
 
     def forward(self,z):
         x = self.linear(z)
@@ -224,7 +179,8 @@ class Decoder(nn.Module):
         x = self.step1(x)
         x = self.step2(x)
         x = self.step3(x)
-        recon = self.step4(x)
+        x = self.step4(x)
+        recon = self.relu(x)
         return recon
     
 

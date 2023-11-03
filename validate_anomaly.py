@@ -10,6 +10,8 @@ import numpy as np
 
 from collections import OrderedDict
 
+import matplotlib.pyplot as plt
+
 # Author: @simonamador
 
 batch = 64
@@ -28,14 +30,15 @@ if anomaly == 'VM':
     images = os.listdir(path + 'Ventriculomegaly/recon_img/')
 writer = open(path+'Results/Val-anomaly_'+anomaly+'_'+date+'cropped.txt', 'w')
 
-for view in views:
+for view in views[:31]:
     loss = nn.MSELoss()
-    model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
+    model_path = path + '/Results/Newslices' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
 
     if view == 'L':
         w = 158
         h = 126
-        ids = np.arange(start=12,stop=99)
+        # ids = np.arange(start=12,stop=99)
+        ids = np.arange(start=40,stop=70)
     elif view == 'A':
         w = 110
         h = 126
@@ -82,12 +85,17 @@ for view in views:
             z = encoder(slice)
             recon = decoder(z)
 
+            print(z)
+
             error = loss(recon,slice)
             errors.append(error.detach().numpy())
 
             recon = recon.detach().cpu().numpy().squeeze()
             input = slice.cpu().numpy().squeeze()
 
+            plt.imshow(recon, cmap='gray')
+            plt.show()
+            exit(0)
         error = np.mean(errors)
         print('-'*20)
         writer.write(", "+str(error))
