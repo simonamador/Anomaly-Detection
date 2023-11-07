@@ -17,7 +17,7 @@ batch = 64
 view = 'L'
 date = str(sys.argv[1])
 anomaly = str(sys.argv[2])
-model = 'default_AE_MS_SSIM'
+model = 'bVAE_AE_L2'
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
 
@@ -32,7 +32,7 @@ elif anomaly == 'healthy':
     images = os.listdir(path + 'healthy_dataset/test/')
     extract_path = path + 'healthy_dataset/test/'
 
-model_path = path + '/Results/Relu_' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
+model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '_100.0/Saved_models/'
 
 if view == 'L':
     w = 158
@@ -50,8 +50,8 @@ else:
 encoder = Encoder(w,h,512)
 decoder = Decoder(w,h,256)
 
-cpe = torch.load(model_path+'encoder_best.pth')
-cpd = torch.load(model_path+'decoder_best.pth')
+cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
+cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
 
 cpe_new = OrderedDict()
 cpd_new = OrderedDict()

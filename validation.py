@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--model_type',
     dest='type',
-    choices=['default', 'residual', 'self-attention','full'],
+    choices=['default', 'residual', 'bVAE', 'self-attention','full'],
     required=False,
     default='default',
     help='''
@@ -188,7 +188,7 @@ for idx,image in enumerate(images):
         MSE += mse(slice, recon)
         MAE += mae(slice, recon)
         SSIM += ssim(slice, recon)
-        writer.write(image[:-4]+', '+str(idx+1)+', '+str(MAE.item())+', '+str(MSE.item())+', '+str(SSIM.item())+'\n')
+        writer.write(image[:-4]+', '+str(id+1)+', '+str(MAE.item())+', '+str(MSE.item())+', '+str(SSIM.item())+'\n')
 
         
     print('-'*20)

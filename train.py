@@ -21,6 +21,11 @@ import time
 # Dataset generator class. It inputs the dataset path and view, outputs the image given an index.
 # performs image extraction according to the view, normalization and convertion to tensor.
 
+def Dkl(mu, log_var):
+
+    klds = -0.5 * (1 + log_var - mu ** 2 - log_var.exp())
+    return klds.sum(1).mean(0, True)
+
 class SSIM_Loss(SSIM):
     def forward(self, img1, img2):
         return 100 * (1 - super(SSIM_Loss, self).forward(img1, img2))
@@ -31,17 +36,6 @@ class MS_SSIM_Loss(MS_SSIM):
     
 class Mixed(SSIM):
     def forward(self, img1, img2):
-        # L1 = nn.L1Loss()
-
-        # sz1 = img2.size(dim=2)
-        # sz2 = img2.size(dim=3)
-
-        # g1 = torch.arange(-(sz1/2), sz1/2)
-        # g1 = torch.exp(-1.*g1**2/(2*0.5**2))
-        # g2 = torch.arange(-(sz2/2), sz2/2)
-        # g2 = torch.exp(-1.*g2**2/(2*0.5**2))
-        # Gl = torch.outer(g1, g2)
-        # Gl /= torch.sum(Gl)
 
         return 100 * (0.84 * ( 1 - super(Mixed, self).forward(img1, img2)) + (1-0.84) * torch.mean(((img1-img2)**2)*self.win))
 
@@ -81,7 +75,7 @@ class img_dataset(Dataset):
 
 # Validation function. Acts as the testing portion of training. Inputs the testing dataloader, encoder and
 # decoder models, and the loss function. Outputs the loss of the model on the testing data.
-def validation(ds,encoder,decoder,loss):
+def validation(ds,encoder,decoder,loss,model,beta=None):
     encoder.eval()
     decoder.eval()
 
@@ -97,10 +91,14 @@ def validation(ds,encoder,decoder,loss):
         for data in ds:
             img = data.to(device)
 
-            z = encoder(img)
+            z, mu, log_var = encoder(img)
             x_recon = decoder(z)
 
-            ed_loss = loss(x_recon, img)
+            if model == 'bVAE':
+                kld_loss = Dkl(mu, log_var)
+                ed_loss = loss(x_recon,img) + kld_loss*beta
+            else:
+                ed_loss = loss(x_recon,img)
 
             ae_loss += ed_loss
             metric1 += ssim(x_recon, img, data_range=1.0, win_size = 11)
@@ -119,7 +117,7 @@ def validation(ds,encoder,decoder,loss):
 # size of the z_vector (512), model type, epochs of training and loss function. Trains the model, saves 
 # training and testing loss for each epoch, saves the parameters for the best model and the last model.
 
-def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss):
+def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
     # Creates encoder & decoder models.
 
     encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
@@ -151,10 +149,14 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss):
         for data in train_ds:
             img = data.to(device)
 
-            z = encoder(img)
+            z, mu, log_var = encoder(img)
             x_recon = decoder(z)
 
-            ed_loss = loss(x_recon,img)
+            if model == 'bVAE':
+                kld_loss = Dkl(mu, log_var)
+                ed_loss = loss(x_recon,img) + kld_loss*beta
+            else:
+                ed_loss = loss(x_recon,img)
 
             optimizer.zero_grad()
             ed_loss.backward()
@@ -165,7 +167,7 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss):
             step +=1
 
         tr_loss = ae_loss_epoch / len(train_ds)
-        metrics = validation(val_ds, encoder, decoder, loss)
+        metrics = validation(val_ds, encoder, decoder, loss, model, beta=beta)
         val_loss = metrics[0].item()
 
         print('train_loss: {:.4f}'.format(tr_loss))
@@ -217,7 +219,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--model_type',
         dest='type',
-        choices=['default', 'residual', 'self-attention','full'],
+        choices=['default', 'residual', 'bVAE', 'self-attention','full'],
         required=True,
         help='''
         Type of model to train. Available options:
@@ -277,6 +279,16 @@ if __name__ == '__main__':
         help='''
         Number of batch size.
         ''')
+    
+    parser.add_argument('--beta',
+        dest='beta',
+        type=float,
+        default=None,
+        choices=[0.1, 1, 10, 100],
+        required=False,
+        help='''
+        Number of batch size.
+        ''')
 
     args = parser.parse_args()
 
@@ -290,6 +302,15 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch
     loss_type = args.loss
+
+    if model == 'bVAE':
+        if args.beta is None:
+            print('Beta value will be assigned 1.')
+            beta = 1
+        else:
+            beta = args.beta
+
+
     z_dim = 512                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
 
 # Connect to GPU
@@ -313,7 +334,7 @@ if __name__ == '__main__':
     if not os.path.exists(results_path):
         os.mkdir(results_path)
         
-    folder_name = "/Relu_{0}_{1}_AE_{2}_b{3}_{4}".format(view,model,loss_type,batch_size,date)
+    folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}_{5}".format(view,model,loss_type,batch_size,date,beta)
     tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):
@@ -394,4 +415,4 @@ if __name__ == '__main__':
     print('.'*50)
 
 # Conducts training
-    train(train_final,val_final,h,w,z_dim,model,epochs,loss)
+    train(train_final,val_final,h,w,z_dim,model,epochs,loss,beta=beta)

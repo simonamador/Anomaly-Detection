@@ -84,12 +84,13 @@ class Encoder(nn.Module):
         ch = 16
         k_size = 4
         stride = 2
+        self.model = model
 
         super(Encoder,self).__init__()
 
         self.step0 = Basic(1,ch,k_size=k_size, stride=stride)
 
-        if model == 'default':
+        if model == 'default' or model == 'bVAE':
             self.step1 = Basic(ch,ch * 2, k_size=k_size, stride=stride)
             self.step2 = Basic(ch * 2,ch * 4, k_size=k_size, stride=stride)
             self.step3 = Basic(ch * 4,ch * 8, k_size=k_size, stride=stride)
@@ -125,7 +126,10 @@ class Encoder(nn.Module):
 
         z_dist = dist.Normal(mu, std)
         z_sample = z_dist.rsample()
-        return z_sample
+        if self.model != 'bVAE':
+            return z_sample
+        else:
+            return z_sample, mu, log_std
    
 # Decoder class builds decoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the input z-vector), model (the model type) 
@@ -151,7 +155,7 @@ class Decoder(nn.Module):
         self.z_develop = self.hshape * self.wshape * 8 * self.ch
         self.linear = nn.Linear(z_dim, self.z_develop)
 
-        if model == 'default':
+        if model == 'default' or model == 'bVAE':
             self.step1 = Basic(self.ch* 8, self.ch * 4, k_size=self.k_size, stride=self.stride, transpose=True)
             self.step2 = Basic(self.ch * 4, self.ch * 2, k_size=self.k_size, stride=self.stride, transpose=True)
             self.step3 = Basic(self.ch * 2, self.ch, k_size=self.k_size, stride=self.stride, transpose=True)
@@ -171,7 +175,6 @@ class Decoder(nn.Module):
             raise AttributeError("Model is not valid")
         
         self.step4 = Basic(self.ch, 1, k_size=self.k_size, stride=self.stride, transpose=True)
-        self.relu = nn.ReLU()
 
     def forward(self,z):
         x = self.linear(z)
@@ -180,7 +183,7 @@ class Decoder(nn.Module):
         x = self.step2(x)
         x = self.step3(x)
         x = self.step4(x)
-        recon = self.relu(x)
+        recon = torch.sigmoid(x)
         return recon
     
 
