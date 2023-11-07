@@ -10,11 +10,14 @@ import numpy as np
 
 from collections import OrderedDict
 
+import matplotlib.pyplot as plt
+
 # Author: @simonamador
 
-batches = [32,64]
-view = 'L'
+batch = 64
+views = ['L','A','S']
 date = str(sys.argv[1])
+anomaly = str(sys.argv[2])
 model = 'default_AE_L2'
 
 path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
@@ -23,18 +26,19 @@ print('-'*20)
 print('Beginning validation:')
 print('-'*20)
 
-images = os.listdir(path + 'healthy_dataset/test/')
+if anomaly == 'VM':
+    images = os.listdir(path + 'Ventriculomegaly/recon_img/')
+writer = open(path+'Results/Val-anomaly_'+anomaly+'_'+date+'cropped.txt', 'w')
 
-writer = open(path+'Results/Batch_size_'+view+'_'+date+'cropped.txt', 'w')
-
-for batch in batches:
+for view in views[:31]:
     loss = nn.MSELoss()
-    model_path = path + '/Results/' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
+    model_path = path + '/Results/Newslices' + view + '_' + model + '_b' +str(batch) + '_' + date + '/Saved_models/'
 
     if view == 'L':
         w = 158
         h = 126
-        ids = np.arange(start=12,stop=99)
+        # ids = np.arange(start=12,stop=99)
+        ids = np.arange(start=40,stop=70)
     elif view == 'A':
         w = 110
         h = 126
@@ -65,12 +69,12 @@ for batch in batches:
     decoder.load_state_dict(cpd_new)
 
     errors = []
-    writer.write("Batch size "+str(batch)+", ")
+    writer.write("view "+view+", ")
     
     for idx,image in enumerate(images):
         print('-'*20)
         print(f'Currently in image {idx+1} of {len(images)}')
-        val_path = path + 'healthy_dataset/test' + '/' + image
+        val_path = path + 'Ventriculomegaly/recon_img/' + image
 
         val_set = img_dataset(val_path,view)
 
@@ -81,12 +85,17 @@ for batch in batches:
             z = encoder(slice)
             recon = decoder(z)
 
+            print(z)
+
             error = loss(recon,slice)
             errors.append(error.detach().numpy())
 
             recon = recon.detach().cpu().numpy().squeeze()
             input = slice.cpu().numpy().squeeze()
 
+            plt.imshow(recon, cmap='gray')
+            plt.show()
+            exit(0)
         error = np.mean(errors)
         print('-'*20)
         writer.write(", "+str(error))
