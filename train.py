@@ -91,13 +91,14 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
         for data in ds:
             img = data.to(device)
 
-            z, mu, log_var = encoder(img)
-            x_recon = decoder(z)
-
             if model == 'bVAE':
+                z, mu, log_var = encoder(img)
+                x_recon = decoder(z)
                 kld_loss = Dkl(mu, log_var)
                 ed_loss = loss(x_recon,img) + kld_loss*beta
             else:
+                z = encoder(img)
+                x_recon = decoder(z)
                 ed_loss = loss(x_recon,img)
 
             ae_loss += ed_loss
@@ -149,13 +150,14 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
         for data in train_ds:
             img = data.to(device)
 
-            z, mu, log_var = encoder(img)
-            x_recon = decoder(z)
-
             if model == 'bVAE':
+                z, mu, log_var = encoder(img)
+                x_recon = decoder(z)
                 kld_loss = Dkl(mu, log_var)
                 ed_loss = loss(x_recon,img) + kld_loss*beta
             else:
+                z = encoder(img)
+                x_recon = decoder(z)
                 ed_loss = loss(x_recon,img)
 
             optimizer.zero_grad()
@@ -167,7 +169,11 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
             step +=1
 
         tr_loss = ae_loss_epoch / len(train_ds)
-        metrics = validation(val_ds, encoder, decoder, loss, model, beta=beta)
+
+        if beta is None:
+            metrics = validation(val_ds, encoder, decoder, loss, model)
+        else:
+            metrics = validation(val_ds, encoder, decoder, loss, model, beta=beta)
         val_loss = metrics[0].item()
 
         print('train_loss: {:.4f}'.format(tr_loss))
@@ -302,6 +308,7 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch
     loss_type = args.loss
+    beta = None
 
     if model == 'bVAE':
         if args.beta is None:
@@ -311,7 +318,7 @@ if __name__ == '__main__':
             beta = args.beta
 
 
-    z_dim = 512                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
+    z_dim = 1024                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
 
 # Connect to GPU
 
@@ -334,7 +341,7 @@ if __name__ == '__main__':
     if not os.path.exists(results_path):
         os.mkdir(results_path)
         
-    folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}_{5}".format(view,model,loss_type,batch_size,date,beta)
+    folder_name = "/HighZ{0}_{1}_AE_{2}_b{3}_{4}".format(view,model,loss_type,batch_size,date)
     tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):
