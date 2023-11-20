@@ -175,6 +175,7 @@ class Decoder(nn.Module):
             raise AttributeError("Model is not valid")
         
         self.step4 = Basic(self.ch, 1, k_size=self.k_size, stride=self.stride, transpose=True)
+        self.activation = nn.ReLU()
 
     def forward(self,z):
         x = self.linear(z)
@@ -183,7 +184,7 @@ class Decoder(nn.Module):
         x = self.step2(x)
         x = self.step3(x)
         x = self.step4(x)
-        recon = torch.sigmoid(x)
+        recon = self.activation(x)
         return recon
     
 
