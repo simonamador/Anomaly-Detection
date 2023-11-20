@@ -11,13 +11,13 @@ losses <- c("L2", "SSIM", "MS_SSIM")
 extras <- c("0.1_", "1.0_", "10.0_", "100.0_")
 
 view <- "L"
-extra <- "Relu_"
+extra <- ""
 model <- "bVAE"
 loss <- "L2"
 batch <- "64"
-date <- "20231106"
+date <- "20231107"
 
-for (extra in extras) {
+for (view in views) {
 
   if (view == "L") {
     l <- 110
@@ -59,7 +59,7 @@ for (extra in extras) {
   }
 }
 
-for (extra in extras) {
+for (view in views) {
 
   if (view == "L") {
     name <- "sagittal"
