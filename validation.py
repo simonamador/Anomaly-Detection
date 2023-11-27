@@ -177,17 +177,13 @@ for idx,image in enumerate(images):
 
     loader = DataLoader(val_set, batch_size=1)
 
-    MSE = 0
-    MAE = 0
-    SSIM = 0
-
     for id, slice in enumerate(loader):
         z = encoder(slice)
         recon = decoder(z)
 
-        MSE += mse(slice, recon)
-        MAE += mae(slice, recon)
-        SSIM += ssim(slice, recon)
+        MSE = mse(slice, recon)
+        MAE = mae(slice, recon)
+        SSIM = ssim(slice, recon)
         writer.write(image[:-4]+', '+str(id+1)+', '+str(MAE.item())+', '+str(MSE.item())+', '+str(SSIM.item())+'\n')
 
         

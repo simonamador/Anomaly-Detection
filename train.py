@@ -318,7 +318,7 @@ if __name__ == '__main__':
             beta = args.beta
 
 
-    z_dim = 1024                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
+    z_dim = 800                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
 
 # Connect to GPU
 
@@ -341,7 +341,7 @@ if __name__ == '__main__':
     if not os.path.exists(results_path):
         os.mkdir(results_path)
         
-    folder_name = "/HighZ{0}_{1}_AE_{2}_b{3}_{4}".format(view,model,loss_type,batch_size,date)
+    folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}".format(view,model,loss_type,batch_size,date)
     tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):
