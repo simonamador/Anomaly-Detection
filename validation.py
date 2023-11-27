@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, Subset
 import torch.nn as nn
 from model import Encoder, Decoder
 from train import img_dataset
+from post_processing import threshold
 from pytorch_msssim import ssim
 
 import os
@@ -160,8 +161,8 @@ else:
     img_path = 'healthy_dataset/test/'
     images = os.listdir(path + img_path)
 
-mae = nn.L1Loss()
-mse = nn.MSELoss()
+mae = nn.L1Loss(reduction = 'none')
+mse = nn.MSELoss(reduction = 'none')
 
 writer = open(path+'Results/Validations/' + anomaly + '_' + model_name +'.txt', 'w')
 writer.write('Case_ID, Slide_ID, mae, mse, ssim'+'\n')
@@ -181,10 +182,10 @@ for idx,image in enumerate(images):
         z = encoder(slice)
         recon = decoder(z)
 
-        MSE = mse(slice, recon)
-        MAE = mae(slice, recon)
+        MSE = np.mean(threshold(mse(slice, recon).detach().cpu().numpy().squeeze()))
+        MAE = np.mean(threshold(mae(slice, recon).detach().cpu().numpy().squeeze()))
         SSIM = ssim(slice, recon)
-        writer.write(image[:-4]+', '+str(id+1)+', '+str(MAE.item())+', '+str(MSE.item())+', '+str(SSIM.item())+'\n')
+        writer.write(image[:-4]+', '+str(id+1)+', '+str(MAE)+', '+str(MSE)+', '+str(SSIM.item())+'\n')
 
         
     print('-'*20)

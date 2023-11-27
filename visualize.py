@@ -1,7 +1,10 @@
 import torch
 from torch.utils.data import DataLoader, Subset
 import torch.nn as nn
+
 from model import Encoder, Decoder
+from post_processing import perceptual_loss, threshold
+
 from train import img_dataset
 import matplotlib.pyplot as plt
 
@@ -163,7 +166,7 @@ else:
 
 loss = nn.MSELoss(reduction = 'none')
 
-save_path = path + 'Results/Visual_' + anomaly + '/' + model_name + '/'
+save_path = path + 'Results/Visual_' + anomaly + '/Otsu_' + model_name + '/'
 if not os.path.exists(save_path):
         os.mkdir(save_path)
 
@@ -182,13 +185,19 @@ for idx,image in enumerate(images):
         z = encoder(slice)
         recon = decoder(z)
         error = loss(recon,slice)
+        n_error, th = threshold(error.detach().cpu().numpy().squeeze())
         
-        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-        ax1.imshow(slice.detach().cpu().numpy().squeeze(), cmap = "gray")
-        ax1.axis("off")
-        ax2.imshow(recon.detach().cpu().numpy().squeeze(), cmap = "gray")
-        ax2.axis("off")
-        ax3.imshow(error.detach().cpu().numpy().squeeze(), cmap = "hot")
-        ax3.axis("off")
+        fig, axs = plt.subplots(2,3)
+        axs[0,0].imshow(slice.detach().cpu().numpy().squeeze(), cmap = "gray")
+        axs[0,0].axis("off")
+        axs[1,0].imshow(recon.detach().cpu().numpy().squeeze(), cmap = "gray")
+        axs[1,0].axis("off")
+        axs[0,1].imshow(n_error, cmap = "hot")
+        axs[0,1].axis("off")
+        axs[1,1].hist(n_error)
+        axs[0,2].imshow(th, cmap = "hot")
+        axs[0,2].axis("off")
+        axs[1,2].hist(th)
 
         plt.savefig(save_path+image[:-4]+'_sl'+str(id)+'.png')
+        plt.close()
