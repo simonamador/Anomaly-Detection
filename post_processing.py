@@ -90,14 +90,35 @@ def perceptual_loss(input, recon, model_name):
 
     output = encoder(recon)    
 
-    V = np.absolute(in_feats['step0'] - out_feats['step0'])
+    V = np.absolute(in_feats['step1'] - out_feats['step1'])
     V = np.expand_dims(V,axis=0)
     V = torch.from_numpy(V).type(torch.float)
-    per_dif = decoder.activation(decoder.step4(V))
+    per_dif = decoder.activation(decoder.step4(decoder.step3(V)))
     return per_dif
 
 def threshold(img):
     img_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
     img_norm[np.where(img_norm>100)] = 0
     ret, th = cv2.threshold(img_norm, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    return th
+    return img_norm, th
+
+def mask_generation(input, recon):
+
+    clahe = cv2.createCLAHE(clipLimit=2,
+	    tileGridSize=(8, 8))
+    
+    eq_input = clahe.apply(input)
+    eq_recon = clahe.apply(recon)
+    dif = abs(eq_recon - eq_input)
+    norm95 = (dif*1.0 / np.percentile(dif, 95,
+                           axis=(0, 1))).clip(0, 1)
+    
+    input = torch.from_numpy(input.repeat(repeats=3)).type(torch.float)
+    recon = torch.from_numpy(recon.repeat(repeats=3)).type(torch.float)
+
+    import lpips
+
+    fn_metric = lpips.LPIPS(net='alex')
+    slpips = fn_metric.forward(input,recon)
+
+    return norm95*np.mean(slpips.detach().cpu().numpy().squeeze(),axis=0)
