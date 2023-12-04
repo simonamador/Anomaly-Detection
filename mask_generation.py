@@ -197,4 +197,4 @@ for idx,image in enumerate(images):
 
         mask = mask_generation(slice, recon)
 
-        plt.imsave(mask_path+image+'_s'+str(id)+'.png', mask)
+        plt.imsave(mask_path+image+'_s'+str(id)+'.png', mask, cmap="gray")
