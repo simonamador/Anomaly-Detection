@@ -12,14 +12,14 @@ import random
 dir_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/healthy_dataset/'
 
 # Obtains the number of MRI .nii images in dataset
-images = os.listdir(dir_path+'recon_img')
+images = os.listdir(dir_path+'Raw')
 n = len(images)
 
 print(f"Total number of MRI images: {n}")
 random.shuffle(images)
 
 for id, image in enumerate(images):
-    source_path = dir_path + 'recon_img/' + image
+    source_path = dir_path + 'Raw/' + image
 
     if id < floor(n*.8):
         ds = 'train/'

@@ -46,7 +46,7 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
                 ed_loss = loss(x_recon,img)
 
             ae_loss += ed_loss
-            metric1 += 100-loss_lib.ssim_loss(x_recon, img)
+            metric1 += (100-loss_lib.ssim_loss(x_recon, img))/100
             metric2 += mse(x_recon, img)
             metric3 += mae(x_recon, img)
         ae_loss /= len(ds)

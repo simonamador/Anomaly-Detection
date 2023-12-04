@@ -1,46 +1,31 @@
-from pytorch_msssim import MS_SSIM, SSIM, gaussian_filter, _fspecial_gauss_1d
+import monai.losses as losses 
+from monai.networks.layers import gaussian_1d, separable_filtering
 import torch.nn as nn
-import lpips
 
 def kld_loss(mu, log_var):
     klds = -0.5 * (1 + log_var - mu ** 2 - log_var.exp())
     return klds.sum(1).mean(0, True)
+    
+l1_loss = nn.L1Loss()
 
-class ssim_loss():
-    def __init__(self,):
-        self.loss = SSIM(data_range=1.0, win_size = 5, size_average=True, channel=1)
-    def forward(self, x, y):
-        return 100 * (1 - self.loss(x, y))
+l2_loss = nn.MSELoss()
 
-class ms_ssim_loss():
-    def __init__(self,):
-        self.loss = MS_SSIM(data_range=1.0, win_size = 5, size_average=True, channel=1)
-    def forward(self, x, y):
-        return 100 * (1 - self.loss(x, y))
+ssim_loss = losses.SSIMLoss(spatial_dims=2)
+
+ms_ssim_loss = losses.MultiScaleLoss(loss = losses.SSIMLoss(spatial_dims = 2, win_size = 9),
+                                     scales = [0.5, 1.0, 2.0, 4.0, 8.0])
+
+perceptual_loss = losses.PerceptualLoss(spatial_dims = 2, network_type = 'radimagenet_resnet50')
     
-class l1_loss():
-    def __init__(self,):
-        self.loss = nn.L1Loss()
-    def forward(self, x, y):
-        return self.loss(x, y)
-    
-class l2_loss():
-    def __init__(self,):
-        self.loss = nn.MSELoss()
-    def forward(self, x, y):
-        return self.loss(x, y)
-    
-class l1_ssim_loss():
+class l1_ssim_loss(nn.Module):
     def __init__(self, alpha = 0.84):
         self.l1 = nn.L1Loss(reduction='none')
-        self.ssim = SSIM(data_range=1.0, win_size = 5, size_average=True, channel=1)
-        self.win = _fspecial_gauss_1d(size = 5, sigma = 1.5)
+        self.ssim = ssim_loss
+        self.win = gaussian_1d
         self.alpha = alpha
     def forward(self, x, y):
-        return 100 * (self.alpha * self.ssim + (1-self.alpha) * self.l1 * gaussian_filter(self.win))
-    
-class perceptual_loss():
-    def __init__(self,): 
-        self.loss = lpips.LPIPS(net='alex')
-    def forward(self, x, y):
-        return self.loss.forward(x, y)
+        A = self.alpha * self.ssim.forward(x, y)
+        B = (1-self.alpha) * self.l1(
+            separable_filtering(y, [self.win(1.5).to(y)] * (x.ndim -2)), 
+            separable_filtering(x, [self.win(1.5).to(y)] * (x.ndim -2)))
+        return 100 * (A + B)
