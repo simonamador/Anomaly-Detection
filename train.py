@@ -1,13 +1,12 @@
 import torch
-import torch.nn as nn
+from torch.nn import DataParallel
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import DataLoader, Subset
 
 from model import Encoder, Decoder
-from pytorch_msssim import MS_SSIM, ms_ssim, SSIM, ssim
+from process import img_dataset
 
-import nibabel as nib
-
+import loss as loss_lib
 import numpy as np
 import os
 import argparse
@@ -18,69 +17,14 @@ import time
 # The following code performs the training of the AE model. The training can be performed for different
 # views, model types, loss functions, epochs, and batch sizes. 
 
-# Dataset generator class. It inputs the dataset path and view, outputs the image given an index.
-# performs image extraction according to the view, normalization and convertion to tensor.
-
-def Dkl(mu, log_var):
-
-    klds = -0.5 * (1 + log_var - mu ** 2 - log_var.exp())
-    return klds.sum(1).mean(0, True)
-
-class SSIM_Loss(SSIM):
-    def forward(self, img1, img2):
-        return 100 * (1 - super(SSIM_Loss, self).forward(img1, img2))
-
-class MS_SSIM_Loss(MS_SSIM):
-    def forward(self, img1, img2):
-        return 100 * (1 - super(MS_SSIM_Loss, self).forward(img1, img2))
-    
-class Mixed(SSIM):
-    def forward(self, img1, img2):
-
-        return 100 * (0.84 * ( 1 - super(Mixed, self).forward(img1, img2)) + (1-0.84) * torch.mean(((img1-img2)**2)*self.win))
-
-class img_dataset(Dataset):
-    def __init__(self, root_dir, view):
-        self.root_dir = root_dir
-        self.view = view
-
-    def __len__(self):
-        if self.view == 'L':
-            size = 110
-        elif self.view == 'A':
-            size = 158
-        else:
-            size = 126
-        return size
-    
-    def __getitem__(self, idx):
-        raw = nib.load(self.root_dir).get_fdata()
-        if self.view == 'L':
-            n_img = raw[idx,:158,:]    
-        elif self.view == 'A':
-            n_img = raw[:110,idx,:]
-        else:
-            n_img = raw[:110,:158,idx]
-
-        num = n_img-np.min(n_img)
-        den = np.max(n_img)-np.min(n_img)
-        out = np.zeros((n_img.shape[0], n_img.shape[1]))
-    
-        n_img = np.divide(num, den, out=out, where=den!=0)
-
-        n_img = np.expand_dims(n_img,axis=0)
-        n_img = torch.from_numpy(n_img).type(torch.float)
-
-        return n_img
-
 # Validation function. Acts as the testing portion of training. Inputs the testing dataloader, encoder and
 # decoder models, and the loss function. Outputs the loss of the model on the testing data.
 def validation(ds,encoder,decoder,loss,model,beta=None):
     encoder.eval()
     decoder.eval()
 
-    mse = nn.MSELoss()
-    mae = nn.L1Loss()
+    mse = loss_lib.l2_loss()
+    mae = loss_lib.l1_loss()
 
     ae_loss = 0.0
     metric1 = 0.0
@@ -94,7 +38,7 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
             if model == 'bVAE':
                 z, mu, log_var = encoder(img)
                 x_recon = decoder(z)
-                kld_loss = Dkl(mu, log_var)
+                kld_loss = loss_lib.kld_loss(mu, log_var)
                 ed_loss = loss(x_recon,img) + kld_loss*beta
             else:
                 z = encoder(img)
@@ -102,7 +46,7 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
                 ed_loss = loss(x_recon,img)
 
             ae_loss += ed_loss
-            metric1 += ssim(x_recon, img, data_range=1.0, win_size = 11)
+            metric1 += 100-loss_lib.ssim_loss(x_recon, img)
             metric2 += mse(x_recon, img)
             metric3 += mae(x_recon, img)
         ae_loss /= len(ds)
@@ -124,8 +68,8 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
     encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
     decoder = Decoder(h,w,z_dim=int(z_dim/2),model=mtype)
 
-    encoder = nn.DataParallel(encoder).to(device)
-    decoder = nn.DataParallel(decoder).to(device)
+    encoder = DataParallel(encoder).to(device)
+    decoder = DataParallel(decoder).to(device)
 
     # Sets up the optimizer
     optimizer = optim.Adam([{'params': encoder.parameters()},
@@ -153,7 +97,7 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
             if model == 'bVAE':
                 z, mu, log_var = encoder(img)
                 x_recon = decoder(z)
-                kld_loss = Dkl(mu, log_var)
+                kld_loss = loss_lib.kld_loss(mu, log_var)
                 ed_loss = loss(x_recon,img) + kld_loss*beta
             else:
                 z = encoder(img)
@@ -230,8 +174,7 @@ if __name__ == '__main__':
         help='''
         Type of model to train. Available options:
         "defalut" Default VAE using convolution blocks
-        "residual: VAE which adds residual blocks between convolutions''')
-    
+        "residual: VAE which adds residual blocks between convolutions''')  
     parser.add_argument('--model_view',
         dest='view',
         choices=['L', 'A', 'S'],
@@ -240,8 +183,7 @@ if __name__ == '__main__':
         The view of the image input for the model. Options:
         "L" Left view
         "A" Axial view
-        "S" Sagittal view''')
-    
+        "S" Sagittal view''') 
     parser.add_argument('--gpu',
         dest='gpu',
         choices=['0', '1', '2'],
@@ -254,7 +196,6 @@ if __name__ == '__main__':
         Songpa 0, 1
         Gangnam 0, 1
         ''')
-    
     parser.add_argument('--epochs',
         dest='epochs',
         type=int,
@@ -263,8 +204,7 @@ if __name__ == '__main__':
         required=False,
         help='''
         Number of epochs for training.
-        ''')
-    
+        ''')    
     parser.add_argument('--loss',
         dest='loss',
         default='SSIM',
@@ -275,7 +215,6 @@ if __name__ == '__main__':
         L2 = Mean square error.
         SSIM = Structural similarity index.
         ''')
-
     parser.add_argument('--batch',
         dest='batch',
         type=int,
@@ -284,8 +223,7 @@ if __name__ == '__main__':
         required=False,
         help='''
         Number of batch size.
-        ''')
-    
+        ''') 
     parser.add_argument('--beta',
         dest='beta',
         type=float,
@@ -300,7 +238,6 @@ if __name__ == '__main__':
 
     print(args)
     print('-'*25)
-
 
     model = args.type
     view = args.view
@@ -317,8 +254,9 @@ if __name__ == '__main__':
         else:
             beta = args.beta
 
-
     z_dim = 800                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
+    h = w = 158
+
 
 # Connect to GPU
 
@@ -351,36 +289,26 @@ if __name__ == '__main__':
     print('Directories and paths are correctly initialized.')
     print('-'*25)
 
-    print('Initializing loss function.')
-    print('-'*25)
-
-# Defining the loss function. Either L2 or SSIM (for now).
+# Defining the loss function.
 
     if loss_type == 'L2':
-        loss = nn.MSELoss()
+        loss = loss_lib.l2_loss()
     elif loss_type == 'SSIM':
-        loss = SSIM_Loss(data_range=1.0, win_size = 11, size_average=True, channel=1)
+        loss = loss_lib.ssim_loss
     elif loss_type == 'MS_SSIM':
-        loss = MS_SSIM_Loss(data_range=1.0, win_size = 5, size_average=True, channel=1)
+        loss = loss_lib.ms_ssim_loss
     elif loss_type == 'Mixed':
-        loss = Mixed(data_range=1.0, win_size = 11, size_average=True, channel=1)
+        loss = loss_lib.l1_ssim_loss
+    elif loss_type == 'perceptual':
+        loss = loss_lib.perceptual_loss
 
 # Define h and w (shape of the images), change depending on the view.
     if view == 'L':
-        h = 158
-        w = 126
         ids = np.arange(start=40,stop=70)
     elif view == 'A':
-        h = 110
-        w = 126
         ids = np.arange(start=64,stop=94)
     else:
-        h = 110
-        w = 158
         ids = np.arange(start=48,stop=78)
-
-    print(f"h={h}, w={w}")
-    print()
 
     print('Loading data.')
     print('-'*25)
@@ -399,14 +327,14 @@ if __name__ == '__main__':
     for idx,image in enumerate(train_id):
         if idx != 0:
             train_path = source_path + 'train/' + image
-            tr_set = img_dataset(train_path,view)
+            tr_set = img_dataset(train_path,view, size = h)
             tr_set = Subset(tr_set,ids)
             train_set = torch.utils.data.ConcatDataset([train_set, tr_set])
 
     for idx,image in enumerate(test_id):
         if idx != 0:
             test_path = source_path + 'test/' + image
-            ts_set = img_dataset(test_path,view)
+            ts_set = img_dataset(test_path,view, size = h)
             ts_set = Subset(ts_set,ids)
             test_set = torch.utils.data.ConcatDataset([test_set, ts_set])
 

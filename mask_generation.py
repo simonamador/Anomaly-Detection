@@ -1,7 +1,8 @@
 import torch
 from torch.utils.data import DataLoader, Subset
 from model import Encoder, Decoder
-from train import img_dataset
+from process import img_dataset
+from loss import perceptual_loss
 
 import os
 import argparse
@@ -31,11 +32,8 @@ def mask_generation(input, recon):
     input = torch.from_numpy(input).type(torch.float)
     recon = torch.from_numpy(recon).type(torch.float)
     
-    import lpips
-
-    fn_metric = lpips.LPIPS(net='alex')
-    slpips = fn_metric.forward(input,recon)
-
+    per = perceptual_loss
+    slpips = per(input, recon)
     m = norm95*slpips.item()
     m = m * 255/np.max(m)
     m95 = np.percentile(m, 95)

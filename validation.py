@@ -121,17 +121,13 @@ else:
 
 model_path = path + '/Results/' + model_name + '/Saved_models/'
 
+h = w = 158
+
 if view == 'L':
-    w = 158
-    h = 126
     ids = np.arange(start=40,stop=70)
 elif view == 'A':
-    w = 110
-    h = 126
     ids = np.arange(start=64,stop=94)
 else:
-    w = 110
-    h = 158
     ids = np.arange(start=48,stop=78)
 
 encoder = Encoder(w,h,z_dim*2)

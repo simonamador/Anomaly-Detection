@@ -1,9 +1,12 @@
 import numpy as np
 from model import Encoder, Decoder
 import torch
+from torch.utils.data import Dataset
 from collections import OrderedDict
 import re
 import cv2
+import operator
+import nibabel as nib
 
 def active_model(model_name, w, h, z_dim):
     encoder = Encoder(w,h,z_dim*2)
@@ -53,8 +56,6 @@ def model_define(name):
     
     return w, h, z_dim
 
-
-
 def perceptual_loss(input, recon, model_name):
     w, h, z_dim = model_define(model_name)
     encoder, decoder = active_model(model_name=model_name, w=w, h=h, z_dim=z_dim)
@@ -102,23 +103,58 @@ def threshold(img):
     ret, th = cv2.threshold(img_norm, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return img_norm, th
 
-def mask_generation(input, recon):
+def resizing(img, target):
+    if (img.shape > np.array(target)).any():
+        target_shape2 = np.min([target, img.shape],axis=0)
+        start = tuple(map(lambda a, da: a//2-da//2, img.shape, target_shape2))
+        end = tuple(map(operator.add, start, target_shape2))
+        slices = tuple(map(slice, start, end))
+        img = img[tuple(slices)]
+    offset = tuple(map(lambda a, da: a//2-da//2, target, img.shape))
+    slices = [slice(offset[dim], offset[dim] + img.shape[dim]) for dim in range(img.ndim)]
+    result = np.zeros(target)
+    result[tuple(slices)] = img
+    return result
 
-    clahe = cv2.createCLAHE(clipLimit=2,
-	    tileGridSize=(8, 8))
+# Dataset generator class. It inputs the dataset path and view, outputs the image given an index.
+# performs image extraction according to the view, normalization and convertion to tensor.
+
+class img_dataset(Dataset):
+    def __init__(self, root_dir, view, size: int = 158, transform: float = None):
+        self.root_dir = root_dir
+        self.view = view
+        self.horizontal_flip = transform 
+        self.size = size
+
+    def __len__(self):
+        if self.view == 'L':
+            size = 110
+        elif self.view == 'A':
+            size = 158
+        else:
+            size = 126
+        return size
     
-    eq_input = clahe.apply(input)
-    eq_recon = clahe.apply(recon)
-    dif = abs(eq_recon - eq_input)
-    norm95 = (dif*1.0 / np.percentile(dif, 95,
-                           axis=(0, 1))).clip(0, 1)
+    def __getitem__(self, idx):
+        raw = nib.load(self.root_dir).get_fdata()
+        if self.view == 'L':
+            n_img = resizing(raw[idx,:,:],(self.size,self.size))    
+        elif self.view == 'A':
+            n_img = resizing(raw[:,idx,:],(self.size,self.size))
+        else:
+            n_img = resizing(raw[:,:,idx],(self.size,self.size))
+
+        num = n_img-np.min(n_img)
+        den = np.max(n_img)-np.min(n_img)
+        out = np.zeros((n_img.shape[0], n_img.shape[1]))
     
-    input = torch.from_numpy(input.repeat(repeats=3)).type(torch.float)
-    recon = torch.from_numpy(recon.repeat(repeats=3)).type(torch.float)
+        n_img = np.divide(num, den, out=out, where=den!=0)
 
-    import lpips
+        n_img = np.expand_dims(n_img,axis=0)
+        n_img = torch.from_numpy(n_img).type(torch.float)
 
-    fn_metric = lpips.LPIPS(net='alex')
-    slpips = fn_metric.forward(input,recon)
+        if self.transform is not None and self.transform <= 1:
+            if np.random.rand(1) < self.transform:
+                n_img = np.flip(n_img,axis=0)
 
-    return norm95*np.mean(slpips.detach().cpu().numpy().squeeze(),axis=0)
+        return n_img
