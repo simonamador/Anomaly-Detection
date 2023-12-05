@@ -1,13 +1,12 @@
 import torch
 from torch.utils.data import DataLoader, Subset
 import os
-import argparse
 import numpy as np
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 
-from model import Encoder, Decoder
-from utils import img_dataset
+from vae_model.model import Encoder, Decoder
+from utils.process import img_dataset
 from config import settings_parser
 
 parser = settings_parser()

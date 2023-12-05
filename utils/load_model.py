@@ -1,4 +1,4 @@
-from vae_model import Encoder, Decoder
+from vae_model.model import Encoder, Decoder
 from collections import OrderedDict
 import torch
 

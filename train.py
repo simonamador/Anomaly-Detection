@@ -5,10 +5,12 @@ import torch.optim as optim
 import os
 import time
 
-from model import Encoder, Decoder
-from utils import center_slices, loader
+from vae_model.model import Encoder, Decoder
+from utils.process import loader
 from utils import loss as loss_lib
-from config import settings_parser
+from config.parser_module import settings_parser
+
+
 
 # Author: @simonamador
 
@@ -20,9 +22,6 @@ from config import settings_parser
 def validation(ds,encoder,decoder,loss,model,beta=None):
     encoder.eval()
     decoder.eval()
-
-    mse = loss_lib.l2_loss()
-    mae = loss_lib.l1_loss()
 
     ae_loss = 0.0
     metric1 = 0.0
@@ -44,9 +43,9 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
                 ed_loss = loss(x_recon,img)
 
             ae_loss += ed_loss
-            metric1 += (100-loss_lib.ssim_loss(x_recon, img))/100
-            metric2 += mse(x_recon, img)
-            metric3 += mae(x_recon, img)
+            metric1 += 1-loss_lib.ssim_loss(x_recon, img)
+            metric2 += loss_lib.l2_loss(x_recon, img)
+            metric3 += loss_lib.l1_loss(x_recon, img)
         ae_loss /= len(ds)
         metric1 /= len(ds)
         metric2 /= len(ds)
@@ -160,7 +159,7 @@ if __name__ == '__main__':
     parser = settings_parser()
     args = parser.parse_args()
 
-    print(args)
+    print('Trainining script.')
     print('-'*25)
 
     model = args.type
@@ -170,6 +169,7 @@ if __name__ == '__main__':
     batch_size = args.batch
     loss_type = args.loss
     path = args.path
+    beta = args.beta
 
     if model == 'bVAE':
         if args.beta is None:
@@ -213,7 +213,7 @@ if __name__ == '__main__':
 # Defining the loss function.
 
     if loss_type == 'L2':
-        loss = loss_lib.l2_loss()
+        loss = loss_lib.l2_loss
     elif loss_type == 'SSIM':
         loss = loss_lib.ssim_loss
     elif loss_type == 'MS_SSIM':
@@ -229,9 +229,7 @@ if __name__ == '__main__':
     print('Loading datasets.')
     print('-'*25)
 
-    ids = center_slices(view)
-
-    train_final, val_final = loader(source_path, ids, view, batch_size, h)
+    train_final, val_final = loader(source_path, view, batch_size, h)
 
     print('Data has been properly loaded.')
     print('-'*25)

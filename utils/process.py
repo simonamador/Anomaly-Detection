@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
 
-from config import load_model
+from utils.load_model import load_model
 
 import numpy as np
 import re
@@ -102,7 +102,7 @@ class img_dataset(Dataset):
     def __init__(self, root_dir, view, size: int = 158, transform: float = None):
         self.root_dir = root_dir
         self.view = view
-        self.horizontal_flip = transform 
+        self.transform = transform 
         self.size = size
 
     def __len__(self):
@@ -149,9 +149,11 @@ def center_slices(view):
 
 # Begin the initialization of the datasets. Creates dataset iterativey for each subject and
 # concatenates them together for both training and testing datasets (implements img_dataset class).
-def loader(source_path, ids, view, batch_size, h):
+def loader(source_path, view, batch_size, h):
     train_id = os.listdir(source_path+'train/')
     test_id = os.listdir(source_path+'test/')
+
+    ids = center_slices(view)
 
     train_set = img_dataset(source_path+'train/'+train_id[0], view)
     train_set = Subset(train_set,ids)
@@ -177,7 +179,9 @@ def loader(source_path, ids, view, batch_size, h):
     val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
     return train_final, val_final
 
-def val_loader(val_path, view, ids):
+def val_loader(val_path, view):
+
+    ids = center_slices(view)
     val_set = img_dataset(val_path,view)
 
     val_set = Subset(val_set,ids)
