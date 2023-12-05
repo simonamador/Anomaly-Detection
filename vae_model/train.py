@@ -1,14 +1,12 @@
 import torch
 from torch.nn import DataParallel
 import torch.optim as optim
-from torch.utils.data import DataLoader, Subset
 
-import numpy as np
 import os
 import time
 
 from model import Encoder, Decoder
-from utils import img_dataset
+from utils import center_slices, loader
 from utils import loss as loss_lib
 from config import settings_parser
 
@@ -225,49 +223,18 @@ if __name__ == '__main__':
     elif loss_type == 'perceptual':
         loss = loss_lib.perceptual_loss
 
-# Define h and w (shape of the images), change depending on the view.
-    if view == 'L':
-        ids = np.arange(start=40,stop=70)
-    elif view == 'A':
-        ids = np.arange(start=64,stop=94)
-    else:
-        ids = np.arange(start=48,stop=78)
-
-    print('Loading data.')
-    print('-'*25)
-
 # Begin the initialization of the datasets. Creates dataset iterativey for each subject and
 # concatenates them together for both training and testing datasets (implements img_dataset class).
 
-    train_id = os.listdir(source_path+'train/')
-    test_id = os.listdir(source_path+'test/')
+    print('Loading datasets.')
+    print('-'*25)
 
-    train_set = img_dataset(source_path+'train/'+train_id[0], view)
-    train_set = Subset(train_set,ids)
-    test_set = img_dataset(source_path+'test/'+test_id[0],view)
-    test_set = Subset(test_set,ids)
+    ids = center_slices(view)
 
-    for idx,image in enumerate(train_id):
-        if idx != 0:
-            train_path = source_path + 'train/' + image
-            tr_set = img_dataset(train_path,view, size = h)
-            tr_set = Subset(tr_set,ids)
-            train_set = torch.utils.data.ConcatDataset([train_set, tr_set])
-
-    for idx,image in enumerate(test_id):
-        if idx != 0:
-            test_path = source_path + 'test/' + image
-            ts_set = img_dataset(test_path,view, size = h)
-            ts_set = Subset(ts_set,ids)
-            test_set = torch.utils.data.ConcatDataset([test_set, ts_set])
-
-# Dataloaders generated from datasets 
-    train_final = DataLoader(train_set, shuffle=True, batch_size=batch_size,num_workers=12)
-    val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
+    train_final, val_final = loader(source_path, ids, view, batch_size, h)
 
     print('Data has been properly loaded.')
     print('-'*25)
-
 
     print('Beginning training.')
     print('.'*50)

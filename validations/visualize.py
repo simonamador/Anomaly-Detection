@@ -1,19 +1,10 @@
-import torch
-from torch.utils.data import DataLoader, Subset
 import torch.nn as nn
 
-from parser_module import settings_parser
-from model import Encoder, Decoder
-from process import perceptual_loss, threshold, img_dataset
+from config import settings_parser
+from utils import perceptual_loss, threshold, val_loader, load_model, center_slices
 
-from train import img_dataset
 import matplotlib.pyplot as plt
-
 import os
-import argparse
-import numpy as np
-
-from collections import OrderedDict
 
 # Author: @simonamador
 
@@ -46,32 +37,9 @@ model_path = path + '/Results/' + model_name + '/Saved_models/'
 h = w = 158
 
 #158, 126, 110
-if view == 'L':
-    ids = np.arange(start=40,stop=70)
-elif view == 'A':
-    ids = np.arange(start=64,stop=94)
-else:
-    ids = np.arange(start=48,stop=78)
+encoder, decoder = load_model(model_path, h, w, z_dim)
 
-encoder = Encoder(w,h,z_dim*2)
-decoder = Decoder(w,h,z_dim)
-
-cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
-cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
-
-cpe_new = OrderedDict()
-cpd_new = OrderedDict()
-
-for k, v in cpe['encoder'].items():
-    name = k[7:]
-    cpe_new[name] = v
-
-for k, v in cpd['decoder'].items():
-    name = k[7:]
-    cpd_new[name] = v
-
-encoder.load_state_dict(cpe_new)
-decoder.load_state_dict(cpd_new)
+ids = center_slices(view)
 
 if anomaly == 'vm':
     img_path = 'Ventriculomegaly/recon_img/'
@@ -91,11 +59,7 @@ for idx,image in enumerate(images):
     print(f'Currently in image {idx+1} of {len(images)}')
     val_path = path + img_path + image
 
-    val_set = img_dataset(val_path,view)
-
-    val_set = Subset(val_set,ids)
-
-    loader = DataLoader(val_set, batch_size=1)
+    loader = val_loader(val_path, view, ids)
 
     for id, slice in enumerate(loader):
         z = encoder(slice)

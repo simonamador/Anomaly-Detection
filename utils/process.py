@@ -1,35 +1,14 @@
-import numpy as np
-from model import Encoder, Decoder
 import torch
-from torch.utils.data import Dataset
-from collections import OrderedDict
+from torch.utils.data import Dataset, DataLoader, Subset
+
+from config import load_model
+
+import numpy as np
 import re
 import cv2
 import operator
+import os
 import nibabel as nib
-
-def active_model(model_name, w, h, z_dim):
-    encoder = Encoder(w,h,z_dim*2)
-    decoder = Decoder(w,h,z_dim)
-
-    cpe = torch.load(model_name+'encoder_best.pth', map_location=torch.device('cpu'))
-    cpd = torch.load(model_name+'decoder_best.pth', map_location=torch.device('cpu'))
-
-    cpe_new = OrderedDict()
-    cpd_new = OrderedDict()
-
-    for k, v in cpe['encoder'].items():
-        name = k[7:]
-        cpe_new[name] = v
-
-    for k, v in cpd['decoder'].items():
-        name = k[7:]
-        cpd_new[name] = v
-
-    encoder.load_state_dict(cpe_new)
-    decoder.load_state_dict(cpd_new)
-
-    return encoder, decoder
 
 def model_define(name):
     if re.search('L_', name) is not None:
@@ -58,7 +37,7 @@ def model_define(name):
 
 def perceptual_loss(input, recon, model_name):
     w, h, z_dim = model_define(model_name)
-    encoder, decoder = active_model(model_name=model_name, w=w, h=h, z_dim=z_dim)
+    encoder, decoder = load_model(model_name, w, h, z_dim)
 
     in_feats = {}
     out_feats = {}
@@ -158,3 +137,51 @@ class img_dataset(Dataset):
                 n_img = np.flip(n_img,axis=0)
 
         return n_img
+
+def center_slices(view):
+    if view == 'L':
+        ids = np.arange(start=40,stop=70)
+    elif view == 'A':
+        ids = np.arange(start=64,stop=94)
+    else:
+        ids = np.arange(start=48,stop=78)
+    return ids
+
+# Begin the initialization of the datasets. Creates dataset iterativey for each subject and
+# concatenates them together for both training and testing datasets (implements img_dataset class).
+def loader(source_path, ids, view, batch_size, h):
+    train_id = os.listdir(source_path+'train/')
+    test_id = os.listdir(source_path+'test/')
+
+    train_set = img_dataset(source_path+'train/'+train_id[0], view)
+    train_set = Subset(train_set,ids)
+    test_set = img_dataset(source_path+'test/'+test_id[0],view)
+    test_set = Subset(test_set,ids)
+
+    for idx,image in enumerate(train_id):
+        if idx != 0:
+            train_path = source_path + 'train/' + image
+            tr_set = img_dataset(train_path,view, size = h)
+            tr_set = Subset(tr_set,ids)
+            train_set = torch.utils.data.ConcatDataset([train_set, tr_set])
+
+    for idx,image in enumerate(test_id):
+        if idx != 0:
+            test_path = source_path + 'test/' + image
+            ts_set = img_dataset(test_path,view, size = h)
+            ts_set = Subset(ts_set,ids)
+            test_set = torch.utils.data.ConcatDataset([test_set, ts_set])
+
+# Dataloaders generated from datasets 
+    train_final = DataLoader(train_set, shuffle=True, batch_size=batch_size,num_workers=12)
+    val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
+    return train_final, val_final
+
+def val_loader(val_path, view, ids):
+    val_set = img_dataset(val_path,view)
+
+    val_set = Subset(val_set,ids)
+
+    loader = DataLoader(val_set, batch_size=1)
+
+    return loader
