@@ -1,16 +1,15 @@
 import torch
 from torch.utils.data import DataLoader, Subset
-from model import Encoder, Decoder
-from process import img_dataset
-from loss import perceptual_loss
 
 import os
-import argparse
 import numpy as np
-
 from collections import OrderedDict
 import cv2
 import matplotlib.pyplot as plt
+
+from model import Encoder, Decoder
+from utils import img_dataset, perceptual_loss
+from config import settings_parser
 
 def mask_generation(input, recon):
 
@@ -40,80 +39,8 @@ def mask_generation(input, recon):
     ret, b_m = cv2.threshold(m,m95-1,255,cv2.THRESH_BINARY)
     return b_m
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--model_type',
-    dest='type',
-    choices=['default', 'residual', 'bVAE', 'self-attention','full'],
-    required=False,
-    default='default',
-    help='''
-    Type of model to train. Available options:
-    "defalut" Default VAE using convolution blocks
-    "residual: VAE which adds residual blocks between convolutions''')
-
-parser.add_argument('--model_view',
-    dest='view',
-    choices=['L', 'A', 'S'],
-    required=False,
-    default='L',
-    help='''
-    The view of the image input for the model. Options:
-    "L" Left view
-    "A" Axial view
-    "S" Sagittal view''')
-
-parser.add_argument('--loss',
-    dest='loss',
-    default='L2',
-    choices=['L2', 'SSIM', 'MS_SSIM', 'Mixed'],
-    required=False,
-    help='''
-    Loss function:
-    L2 = Mean square error.
-    SSIM = Structural similarity index.
-    ''')
-
-parser.add_argument('--batch',
-    dest='batch',
-    type=int,
-    default=64,
-    choices=range(1, 512),
-    required=False,
-    help='''
-    Number of batch size.
-    ''')
-
-parser.add_argument('--date',
-    dest='date',
-    default='20231102',
-    required=False,
-    help='''
-    Date of model training.
-    ''')
-
-parser.add_argument('--extra',
-    dest='extra',
-    default=False,
-    required=False,
-    help='''
-    Extra model name info.
-    ''')
-
-parser.add_argument('--z_dim',
-    dest='z',
-    type=int,
-    default=256,
-    required=False,
-    help='''
-    z dimension.
-    ''')
-
+parser = settings_parser()
 args = parser.parse_args()
-
-print(args)
-print('-'*25)
-
 
 model = args.type
 view = args.view
@@ -122,8 +49,7 @@ loss_type = args.loss
 date = args.date
 extra = args.extra
 z_dim = args.z
-
-path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
+path = args.path
 
 print('-'*20)
 print('Beginning mask generation:')
@@ -136,20 +62,17 @@ else:
 
 model_path = path + '/Results/' + model_name + '/Saved_models/'
 mask_path = path + '/Masks/' + model_name + '/'
+
 if not os.path.exists(mask_path):
         os.mkdir(mask_path)
 
+h = w = 158
+
 if view == 'L':
-    w = 158
-    h = 126
     ids = np.arange(start=40,stop=70)
 elif view == 'A':
-    w = 110
-    h = 126
     ids = np.arange(start=64,stop=94)
 else:
-    w = 110
-    h = 158
     ids = np.arange(start=48,stop=78)
 
 encoder = Encoder(w,h,z_dim*2)

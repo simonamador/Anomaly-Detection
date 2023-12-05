@@ -1,103 +1,22 @@
 import torch
 from torch.utils.data import DataLoader, Subset
 import torch.nn as nn
+
+from parser_module import settings_parser
 from model import Encoder, Decoder
 from train import img_dataset
 from post_processing import threshold
 from pytorch_msssim import ssim
 
 import os
-import argparse
 import numpy as np
 
 from collections import OrderedDict
 
 # Author: @simonamador
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--model_type',
-    dest='type',
-    choices=['default', 'residual', 'bVAE', 'self-attention','full'],
-    required=False,
-    default='default',
-    help='''
-    Type of model to train. Available options:
-    "defalut" Default VAE using convolution blocks
-    "residual: VAE which adds residual blocks between convolutions''')
-
-parser.add_argument('--model_view',
-    dest='view',
-    choices=['L', 'A', 'S'],
-    required=False,
-    default='L',
-    help='''
-    The view of the image input for the model. Options:
-    "L" Left view
-    "A" Axial view
-    "S" Sagittal view''')
-
-parser.add_argument('--loss',
-    dest='loss',
-    default='L2',
-    choices=['L2', 'SSIM', 'MS_SSIM', 'Mixed'],
-    required=False,
-    help='''
-    Loss function:
-    L2 = Mean square error.
-    SSIM = Structural similarity index.
-    ''')
-
-parser.add_argument('--batch',
-    dest='batch',
-    type=int,
-    default=64,
-    choices=range(1, 512),
-    required=False,
-    help='''
-    Number of batch size.
-    ''')
-
-parser.add_argument('--date',
-    dest='date',
-    default='20231102',
-    required=False,
-    help='''
-    Date of model training.
-    ''')
-
-parser.add_argument('--anomaly',
-    dest='anomaly',
-    default='healthy',
-    choices = ['healthy', 'vm'],
-    required=False,
-    help='''
-    Extra model name info.
-    ''')
-
-parser.add_argument('--extra',
-    dest='extra',
-    default=False,
-    required=False,
-    help='''
-    Extra model name info.
-    ''')
-
-parser.add_argument('--z_dim',
-    dest='z',
-    type=int,
-    default=256,
-    required=False,
-    help='''
-    z dimension.
-    ''')
-
-
+parser = settings_parser()
 args = parser.parse_args()
-
-print(args)
-print('-'*25)
-
 
 model = args.type
 view = args.view
@@ -107,8 +26,7 @@ date = args.date
 extra = args.extra
 anomaly = args.anomaly
 z_dim = args.z
-
-path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
+path = args.path
 
 print('-'*20)
 print('Beginning validation:')

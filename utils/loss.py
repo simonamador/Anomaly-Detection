@@ -1,10 +1,11 @@
 import monai.losses as losses 
 from monai.networks.layers import gaussian_1d, separable_filtering
 import torch.nn as nn
+import torch
 
 def kld_loss(mu, log_var):
-    klds = -0.5 * (1 + log_var - mu ** 2 - log_var.exp())
-    return klds.sum(1).mean(0, True)
+    kld = -0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp())
+    return kld
     
 l1_loss = nn.L1Loss()
 

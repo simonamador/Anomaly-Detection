@@ -3,14 +3,14 @@ from torch.nn import DataParallel
 import torch.optim as optim
 from torch.utils.data import DataLoader, Subset
 
-from model import Encoder, Decoder
-from process import img_dataset
-
-import loss as loss_lib
 import numpy as np
 import os
-import argparse
 import time
+
+from model import Encoder, Decoder
+from utils import img_dataset
+from utils import loss as loss_lib
+from config import settings_parser
 
 # Author: @simonamador
 
@@ -59,7 +59,7 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
     return metrics
 
 # Training function. Inputs training dataloader, validation dataloader, h and w values (shape of image),
-# size of the z_vector (512), model type, epochs of training and loss function. Trains the model, saves 
+# size of the z_vector, model type, epochs of training and loss function. Trains the model, saves 
 # training and testing loss for each epoch, saves the parameters for the best model and the last model.
 
 def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
@@ -98,7 +98,7 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
                 z, mu, log_var = encoder(img)
                 x_recon = decoder(z)
                 kld_loss = loss_lib.kld_loss(mu, log_var)
-                ed_loss = loss(x_recon,img) + kld_loss*beta
+                ed_loss = loss(x_recon,img) + (beta * kld_loss)
             else:
                 z = encoder(img)
                 x_recon = decoder(z)
@@ -158,82 +158,8 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
 if __name__ == '__main__':
 
 # The code first parses through input arguments --model_type, --model_view, --gpu, --epochs, --loss, --batch.
-# Model type: default or residual (for now). Which model is it going to train.
-# Model view: which view is the model getting train to (L=saggital,A=frontal,S=axial)
-# GPU: Defines which GPU to use
-# Epochs: How many epochs to train the model for
-# Loss: Which loss function to implement
-# Batch: Batch size for training
 
-    parser = argparse.ArgumentParser()
-    
-    parser.add_argument('--model_type',
-        dest='type',
-        choices=['default', 'residual', 'bVAE', 'self-attention','full'],
-        required=True,
-        help='''
-        Type of model to train. Available options:
-        "defalut" Default VAE using convolution blocks
-        "residual: VAE which adds residual blocks between convolutions''')  
-    parser.add_argument('--model_view',
-        dest='view',
-        choices=['L', 'A', 'S'],
-        required=True,
-        help='''
-        The view of the image input for the model. Options:
-        "L" Left view
-        "A" Axial view
-        "S" Sagittal view''') 
-    parser.add_argument('--gpu',
-        dest='gpu',
-        choices=['0', '1', '2'],
-        required=True,
-        help='''
-        The GPU that will be used for training. Terminals have the following options:
-        Hanyang: 0, 1
-        Busan: 0, 1, 2
-        Sejong 0, 1, 2
-        Songpa 0, 1
-        Gangnam 0, 1
-        ''')
-    parser.add_argument('--epochs',
-        dest='epochs',
-        type=int,
-        default=50,
-        choices=range(1, 15000),
-        required=False,
-        help='''
-        Number of epochs for training.
-        ''')    
-    parser.add_argument('--loss',
-        dest='loss',
-        default='SSIM',
-        choices=['L2', 'SSIM', 'MS_SSIM', 'Mixed'],
-        required=False,
-        help='''
-        Loss function:
-        L2 = Mean square error.
-        SSIM = Structural similarity index.
-        ''')
-    parser.add_argument('--batch',
-        dest='batch',
-        type=int,
-        default=1,
-        choices=range(1, 512),
-        required=False,
-        help='''
-        Number of batch size.
-        ''') 
-    parser.add_argument('--beta',
-        dest='beta',
-        type=float,
-        default=None,
-        choices=[0.1, 1, 10, 100],
-        required=False,
-        help='''
-        Number of batch size.
-        ''')
-
+    parser = settings_parser()
     args = parser.parse_args()
 
     print(args)
@@ -245,7 +171,7 @@ if __name__ == '__main__':
     epochs = args.epochs
     batch_size = args.batch
     loss_type = args.loss
-    beta = None
+    path = args.path
 
     if model == 'bVAE':
         if args.beta is None:
@@ -254,9 +180,8 @@ if __name__ == '__main__':
         else:
             beta = args.beta
 
-    z_dim = 800                 # Dimension of parameters for latent vector (latent vector size = z_dim/2)
+    z_dim = args.z * 2                # Dimension of parameters for latent vector (latent vector size = z_dim/2)
     h = w = 158
-
 
 # Connect to GPU
 
@@ -270,8 +195,6 @@ if __name__ == '__main__':
     print('-'*25)
 
 # Define paths for obtaining dataset and saving models and results.
-    path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
-
     source_path = path + 'healthy_dataset/'
 
     date = time.strftime('%Y%m%d', time.localtime(time.time()))
