@@ -1,8 +1,9 @@
 import torch.nn as nn
 
-from config.parser_module import settings_parser
 from utils.process import val_loader, threshold
+from utils.load_model import load_model
 from utils.loss import ssim_loss
+from config.parser_module import settings_parser
 
 import os
 import numpy as np
@@ -63,7 +64,7 @@ for idx,image in enumerate(images):
 
         MSE = np.mean(threshold(mse(slice, recon).detach().cpu().numpy().squeeze()))
         MAE = np.mean(threshold(mae(slice, recon).detach().cpu().numpy().squeeze()))
-        SSIM = ssim_loss(slice, recon)
+        SSIM = 1-ssim_loss(slice, recon)
         writer.write(image[:-4]+', '+str(id+1)+', '+str(MAE)+', '+str(MSE)+', '+str(SSIM.item())+'\n')
         
     print('-'*20)

@@ -5,12 +5,9 @@ import torch.optim as optim
 import os
 import time
 
-from vae_model.model import Encoder, Decoder
 from utils.process import loader
 from utils import loss as loss_lib
 from config.parser_module import settings_parser
-
-
 
 # Author: @simonamador
 
@@ -19,7 +16,7 @@ from config.parser_module import settings_parser
 
 # Validation function. Acts as the testing portion of training. Inputs the testing dataloader, encoder and
 # decoder models, and the loss function. Outputs the loss of the model on the testing data.
-def validation(ds,encoder,decoder,loss,model,beta=None):
+def validation(ds, encoder, decoder, loss, base, model, beta=None):
     encoder.eval()
     decoder.eval()
 
@@ -30,17 +27,30 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
 
     with torch.no_grad():
         for data in ds:
-            img = data.to(device)
+            img = data['image'].to(device)
 
             if model == 'bVAE':
-                z, mu, log_var = encoder(img)
-                x_recon = decoder(z)
-                kld_loss = loss_lib.kld_loss(mu, log_var)
-                ed_loss = loss(x_recon,img) + kld_loss*beta
+                if base == 'default':
+                    z, mu, log_var = encoder(img)
+                    x_recon = decoder(z)
+                    kld_loss = loss_lib.kld_loss(mu, log_var)
+                    ed_loss = loss(x_recon,img) + (beta * kld_loss)
+                else:
+                    ga = data['ga'].to(device)
+                    z, mu, log_var = encoder(img, ga)
+                    x_recon = decoder(z)
+                    kld_loss = loss_lib.kld_loss(mu, log_var)
+                    ed_loss = loss(x_recon,img) + (beta * kld_loss)
             else:
-                z = encoder(img)
-                x_recon = decoder(z)
-                ed_loss = loss(x_recon,img)
+                if base == 'default':
+                    z = encoder(img)
+                    x_recon = decoder(z)
+                    ed_loss = loss(x_recon,img)
+                else:
+                    ga = data['ga'].to(device)
+                    z = encoder(img, ga)
+                    x_recon = decoder(z)
+                    ed_loss = loss(x_recon,img)
 
             ae_loss += ed_loss
             metric1 += 1-loss_lib.ssim_loss(x_recon, img)
@@ -59,11 +69,18 @@ def validation(ds,encoder,decoder,loss,model,beta=None):
 # size of the z_vector, model type, epochs of training and loss function. Trains the model, saves 
 # training and testing loss for each epoch, saves the parameters for the best model and the last model.
 
-def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
+def train(train_ds, val_ds, h, w, z_dim, base, mtype, epochs, loss, beta=None, ga_method = None):
     # Creates encoder & decoder models.
 
-    encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
-    decoder = Decoder(h,w,z_dim=int(z_dim/2),model=mtype)
+    if base == 'ga_VAE':
+        from models.ga_vae import Encoder, Decoder
+        encoder = Encoder(h,w,z_dim=z_dim,model=mtype, method = ga_method)
+    else:
+        from models.vae import Encoder, Decoder
+        encoder = Encoder(h,w,z_dim=z_dim,model=mtype)
+
+
+    decoder = Decoder(h,w,z_dim=int(z_dim/2))
 
     encoder = DataParallel(encoder).to(device)
     decoder = DataParallel(decoder).to(device)
@@ -78,6 +95,7 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
 
     step = 0
     best_loss = 10000
+    not_improved = 0
 
     # Trains for all epochs
     for epoch in range(epochs):
@@ -89,17 +107,30 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
         ae_loss_epoch = 0.0
 
         for data in train_ds:
-            img = data.to(device)
+            img = data['image'].to(device)
 
             if model == 'bVAE':
-                z, mu, log_var = encoder(img)
-                x_recon = decoder(z)
-                kld_loss = loss_lib.kld_loss(mu, log_var)
-                ed_loss = loss(x_recon,img) + (beta * kld_loss)
+                if base == 'default':
+                    z, mu, log_var = encoder(img)
+                    x_recon = decoder(z)
+                    kld_loss = loss_lib.kld_loss(mu, log_var)
+                    ed_loss = loss(x_recon,img) + (beta * kld_loss)
+                else:
+                    ga = data['ga'].to(device)
+                    z, mu, log_var = encoder(img, ga)
+                    x_recon = decoder(z)
+                    kld_loss = loss_lib.kld_loss(mu, log_var)
+                    ed_loss = loss(x_recon,img) + (beta * kld_loss)
             else:
-                z = encoder(img)
-                x_recon = decoder(z)
-                ed_loss = loss(x_recon,img)
+                if base == 'default':
+                    z = encoder(img)
+                    x_recon = decoder(z)
+                    ed_loss = loss(x_recon,img)
+                else:
+                    ga = data['ga'].to(device)
+                    z = encoder(img, ga)
+                    x_recon = decoder(z)
+                    ed_loss = loss(x_recon,img)
 
             optimizer.zero_grad()
             ed_loss.backward()
@@ -112,9 +143,9 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
         tr_loss = ae_loss_epoch / len(train_ds)
 
         if beta is None:
-            metrics = validation(val_ds, encoder, decoder, loss, model)
+            metrics = validation(val_ds, encoder, decoder, loss, base, model)
         else:
-            metrics = validation(val_ds, encoder, decoder, loss, model, beta=beta)
+            metrics = validation(val_ds, encoder, decoder, loss, base, model, beta=beta)
         val_loss = metrics[0].item()
 
         print('train_loss: {:.4f}'.format(tr_loss))
@@ -147,14 +178,21 @@ def train(train_ds,val_ds,h,w,z_dim,mtype,epochs,loss,beta=None):
                 'decoder': decoder.state_dict(),
             }, model_path + f'/decoder_best.pth')
             print(f'saved best model in epoch: {epoch+1}')
+            not_improved = 0
+        else:
+            not_improved += 1
     
+        if not_improved > 20:
+            break
+
     writer.close()
 
 
 # Main code
 if __name__ == '__main__':
 
-# The code first parses through input arguments --model_type, --model_view, --gpu, --epochs, --loss, --batch.
+# The code first parses through input arguments 
+# -- model --model_type, --model_view, --gpu, --epochs, --loss, --batch.
 
     parser = settings_parser()
     args = parser.parse_args()
@@ -162,8 +200,10 @@ if __name__ == '__main__':
     print('Trainining script.')
     print('-'*25)
 
+    base = args.model
     model = args.type
     view = args.view
+    ga_method = args.ga_method
     gpu = args.gpu
     epochs = args.epochs
     batch_size = args.batch
@@ -171,15 +211,15 @@ if __name__ == '__main__':
     path = args.path
     beta = args.beta
 
+    z_dim = args.z * 2                # Dimension of parameters for latent vector (latent vector size = z_dim/2)
+    h = w = 158
+
     if model == 'bVAE':
         if args.beta is None:
             print('Beta value will be assigned 1.')
             beta = 1
         else:
             beta = args.beta
-
-    z_dim = args.z * 2                # Dimension of parameters for latent vector (latent vector size = z_dim/2)
-    h = w = 158
 
 # Connect to GPU
 
@@ -219,7 +259,7 @@ if __name__ == '__main__':
     elif loss_type == 'MS_SSIM':
         loss = loss_lib.ms_ssim_loss
     elif loss_type == 'Mixed':
-        loss = loss_lib.l1_ssim_loss
+        loss = loss_lib.mixed_loss
     elif loss_type == 'perceptual':
         loss = loss_lib.perceptual_loss
 
@@ -238,4 +278,4 @@ if __name__ == '__main__':
     print('.'*50)
 
 # Conducts training
-    train(train_final,val_final,h,w,z_dim,model,epochs,loss,beta=beta)
+    train(train_final, val_final, h, w, z_dim, base, model, epochs, loss, beta=beta, ga_method = ga_method)

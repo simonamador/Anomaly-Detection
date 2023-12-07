@@ -3,14 +3,23 @@ import argparse
 def settings_parser():
     parser = argparse.ArgumentParser()
     
+    parser.add_argument('--model',
+        dest='model',
+        choices=['default', 'ga_VAE'],
+        default = 'default',
+        required=False,
+        help='''
+        Type of model to train. Available options:
+        "defalut" Default VAE using convolution blocks
+        "ga_VAE: VAE which includes GA as input''') 
     parser.add_argument('--model_type',
         dest='type',
-        choices=['default', 'residual', 'bVAE', 'self-attention','full'],
+        choices=['default', 'bVAE'],
         required=True,
         help='''
         Type of model to train. Available options:
         "defalut" Default VAE using convolution blocks
-        "residual: VAE which adds residual blocks between convolutions''')  
+        "bVAE: VAE with disentanglement''')  
     parser.add_argument('--model_view',
         dest='view',
         choices=['L', 'A', 'S'],
@@ -20,10 +29,19 @@ def settings_parser():
         "L" Left view
         "A" Axial view
         "S" Sagittal view''') 
+    parser.add_argument('--ga_method',
+        dest='ga_method',
+        choices=['multiplication', 'concat'],
+        default = 'concat',
+        required=False,
+        help='''
+        Method to implement GA. Available options:
+        "multiplication", "concat"''') 
     parser.add_argument('--gpu',
         dest='gpu',
         choices=['0', '1', '2'],
-        required=True,
+        default='0',
+        required=False,
         help='''
         The GPU that will be used for training. Terminals have the following options:
         Hanyang: 0, 1
