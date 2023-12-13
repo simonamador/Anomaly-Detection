@@ -105,9 +105,7 @@ class Encoder(nn.Module):
    
 # Decoder class builds decoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the input z-vector), model (the model type) 
-
 # Note: z_dim in Encoder is not the same as z_dim in Decoder, as the z_vector has half the size of the z_parameters.
-
 class Decoder(nn.Module):
     def __init__(
             self, 
