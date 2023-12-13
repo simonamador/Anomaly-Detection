@@ -48,7 +48,7 @@ def mask_builder(input, recon, lpips_vgg, device,mask=False):
         f_m[f_m<1] = 0
         return f_m, saliency
     else:
-        return mask
+        return m
 
 def resizing(img, target):
     if (img.shape > np.array(target)).any():
