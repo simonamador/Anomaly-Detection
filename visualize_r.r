@@ -11,11 +11,11 @@ losses <- c("L2", "SSIM", "MS_SSIM")
 extras <- c("0.1_", "1.0_", "10.0_", "100.0_")
 
 view <- "L"
-extra <- ""
+extra <- "ga_VAE"
 model <- "default"
 loss <- "L2"
 batch <- "64"
-date <- "20231113"
+date <- "20231211"
 
 for (view in views) {
 
@@ -27,8 +27,8 @@ for (view in views) {
     name <- "axial"
   }
 
-  n_name <- paste("history_", extra, view, "_", model, "_AE_", loss,
-                  "_b", batch, "_", date, sep = "")
+  n_name <- paste("history_", view, "_", model, "_AE_", loss,
+                  "_b", batch, "_", date, extra, sep = "")
   f_name <- paste("files/", n_name, ".txt", sep = "")
 
   if (file.exists(f_name)) {
@@ -51,6 +51,7 @@ for (view in views) {
 
     ggsave(paste("graphs/tc", n_name, ".png", sep = ""), tc_plot)
     ggsave(paste("graphs/metric", n_name, ".png", sep = ""), mt_plot)
+    print(paste("view ", name, ": ", min(hist$Val_loss, na.rm = FALSE)))
   } else {
     print("No such file.")
   }
@@ -66,10 +67,10 @@ for (view in views) {
     name <- "axial"
   }
 
-  h_name <- paste("healthy_", extra, view, "_", model, "_AE_", loss,
-                  "_b", batch, "_", date, sep = "")
-  vm_name <- paste("vm_", extra, view, "_", model, "_AE_", loss,
-                   "_b", batch, "_", date, sep = "")
+  h_name <- paste("healthy_", view, "_", model, "_AE_", loss,
+                  "_b", batch, "_", date, extra, sep = "")
+  vm_name <- paste("vm_", view, "_", model, "_AE_", loss,
+                   "_b", batch, "_", date, extra, sep = "")
 
   if (file.exists(paste("files/", h_name, ".txt", sep = ""))) {
 
@@ -77,8 +78,8 @@ for (view in views) {
     vm_val <- read.csv(paste("files/", vm_name, ".txt", sep = ""),
                        header = TRUE)
 
-    h_val <- subset(h_val, select = c("mae", "mse"))
-    vm_val <- subset(vm_val, select = c("mae", "mse"))
+    h_val <- subset(h_val, select = c("mae", "mse", "anomaly"))
+    vm_val <- subset(vm_val, select = c("mae", "mse", "anomaly"))
 
     nh <- nrow(h_val)
     ids_h <- c(1:nh)
