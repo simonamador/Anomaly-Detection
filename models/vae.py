@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
-import numpy as np
-from math import ceil
+
 # Author: @simonamador
 
 # The following code builds an autoencoder model for unsupervised learning applications in MRI anomaly detection.
@@ -190,7 +189,7 @@ class Decoder(nn.Module):
 
 if __name__ == '__main__':
     from torchsummary import summary
-    emodel = Encoder(116, 126, 512,model='default')
-    dmodel = Decoder(116, 126, 256,model='default')
-    summary(emodel, (1, 116, 126), device='cpu')
-    summary(dmodel, (1, 256), device='cpu')
+    emodel = Encoder(158, 158, 1024,model='default')
+    dmodel = Decoder(158, 158, 512,model='default')
+    summary(emodel, (1, 158, 158), device='cpu')
+    summary(dmodel, (1, 512), device='cpu')

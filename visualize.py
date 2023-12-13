@@ -1,105 +1,22 @@
 import torch
-from torch.utils.data import DataLoader, Subset
-import torch.nn as nn
+import lpips
 
-from model import Encoder, Decoder
-from post_processing import perceptual_loss, threshold
+from config.parser_module import settings_parser
+from utils.process import mask_builder, val_loader 
+from utils.loss import l1_error
+from utils.load_model import load_model
 
-from train import img_dataset
 import matplotlib.pyplot as plt
-
-import os
-import argparse
 import numpy as np
-
-from collections import OrderedDict
+import cv2 as cv
+import os
 
 # Author: @simonamador
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--model_type',
-    dest='type',
-    choices=['default', 'residual', 'bVAE', 'self-attention','full'],
-    required=False,
-    default='default',
-    help='''
-    Type of model to train. Available options:
-    "defalut" Default VAE using convolution blocks
-    "residual: VAE which adds residual blocks between convolutions''')
-
-parser.add_argument('--model_view',
-    dest='view',
-    choices=['L', 'A', 'S'],
-    required=False,
-    default='L',
-    help='''
-    The view of the image input for the model. Options:
-    "L" Left view
-    "A" Axial view
-    "S" Sagittal view''')
-
-parser.add_argument('--loss',
-    dest='loss',
-    default='L2',
-    choices=['L2', 'SSIM', 'MS_SSIM', 'Mixed'],
-    required=False,
-    help='''
-    Loss function:
-    L2 = Mean square error.
-    SSIM = Structural similarity index.
-    ''')
-
-parser.add_argument('--batch',
-    dest='batch',
-    type=int,
-    default=64,
-    choices=range(1, 512),
-    required=False,
-    help='''
-    Number of batch size.
-    ''')
-
-parser.add_argument('--date',
-    dest='date',
-    default='20231102',
-    required=False,
-    help='''
-    Date of model training.
-    ''')
-
-parser.add_argument('--anomaly',
-    dest='anomaly',
-    default='healthy',
-    choices = ['healthy', 'vm'],
-    required=False,
-    help='''
-    Extra model name info.
-    ''')
-
-parser.add_argument('--extra',
-    dest='extra',
-    default=False,
-    required=False,
-    help='''
-    Extra model name info.
-    ''')
-
-parser.add_argument('--z_dim',
-    dest='z',
-    type=int,
-    default=256,
-    required=False,
-    help='''
-    z dimension.
-    ''')
-
-
+parser = settings_parser()
 args = parser.parse_args()
 
-print(args)
 print('-'*25)
-
 
 model = args.type
 view = args.view
@@ -109,12 +26,10 @@ date = args.date
 extra = args.extra
 anomaly = args.anomaly
 z_dim = args.z
-
-
-path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/'
+path = args.path
 
 print('-'*20)
-print('Beginning validation:')
+print('Beginning anomaly maps generation:')
 print('-'*20)
 
 if extra:
@@ -124,38 +39,18 @@ else:
 
 model_path = path + '/Results/' + model_name + '/Saved_models/'
 
-if view == 'L':
-    w = 158
-    h = 126
-    ids = np.arange(start=40,stop=70)
-elif view == 'A':
-    w = 110
-    h = 126
-    ids = np.arange(start=64,stop=94)
-else:
-    w = 110
-    h = 158
-    ids = np.arange(start=48,stop=78)
+h = w = 158
 
-encoder = Encoder(w,h,z_dim*2)
-decoder = Decoder(w,h,z_dim)
+#158, 126, 110
+encoder, decoder = load_model(model_path, h, w, z_dim)
 
-cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
-cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+torch.cuda.empty_cache()
 
-cpe_new = OrderedDict()
-cpd_new = OrderedDict()
+lpips_vgg = lpips.LPIPS(pretrained = True, net = 'alex', eval_mode = True, spatial = True, lpips = True).to(device)
 
-for k, v in cpe['encoder'].items():
-    name = k[7:]
-    cpe_new[name] = v
-
-for k, v in cpd['decoder'].items():
-    name = k[7:]
-    cpd_new[name] = v
-
-encoder.load_state_dict(cpe_new)
-decoder.load_state_dict(cpd_new)
 
 if anomaly == 'vm':
     img_path = 'Ventriculomegaly/recon_img/'
@@ -164,9 +59,7 @@ else:
     img_path = 'healthy_dataset/test/'
     images = os.listdir(path + img_path)
 
-loss = nn.MSELoss(reduction = 'none')
-
-save_path = path + 'Results/Visual_' + anomaly + '/Per_loss_Otsu_' + model_name + '/'
+save_path = path + 'Results/Visual_' + anomaly + '/' + model_name + '/'
 if not os.path.exists(save_path):
         os.mkdir(save_path)
 
@@ -175,29 +68,44 @@ for idx,image in enumerate(images):
     print(f'Currently in image {idx+1} of {len(images)}')
     val_path = path + img_path + image
 
-    val_set = img_dataset(val_path,view)
-
-    val_set = Subset(val_set,ids)
-
-    loader = DataLoader(val_set, batch_size=1)
+    loader = val_loader(val_path, view)
 
     for id, slice in enumerate(loader):
         z = encoder(slice)
         recon = decoder(z)
-        error = perceptual_loss(recon,slice, model_path)
-        n_error, th = threshold(error.detach().cpu().numpy().squeeze())
+        error = l1_error(slice, recon)
+
+        slice = slice.detach().cpu().numpy().squeeze()
+        recon = recon.detach().cpu().numpy().squeeze()
+
+        th = mask_builder(slice, recon, lpips_vgg, device)
+
+        masked_img = np.repeat(np.expand_dims(recon,axis=-1), 3, axis =-1)
+        mask_r = np.expand_dims(th,axis=-1)/255*0.56
+        mask_g = np.expand_dims(th,axis=-1)/255*0.93
+        mask_b = np.expand_dims(th,axis=-1)/255*0.56
+        mask = np.concatenate((mask_r,mask_b,mask_g),axis=-1)
+
+        for ch in range(3):
+             for x in range(158):
+                  for y in range(158):
+                       if mask[x,y,ch]>0:
+                            masked_img[x,y,ch] = mask[x,y,ch]
+
+        # error = perceptual_loss(recon,slice) * l1_error(recon,slice)
+        # n_error, th = threshold(error.detach().cpu().numpy().squeeze())
         
         fig, axs = plt.subplots(2,3)
-        axs[0,0].imshow(slice.detach().cpu().numpy().squeeze(), cmap = "gray")
+        axs[0,0].imshow(slice, cmap = "gray")
         axs[0,0].axis("off")
-        axs[1,0].imshow(recon.detach().cpu().numpy().squeeze(), cmap = "gray")
+        axs[1,0].imshow(recon, cmap = "gray")
         axs[1,0].axis("off")
-        axs[0,1].imshow(n_error, cmap = "hot")
+        axs[0,1].imshow(error.detach().cpu().numpy().squeeze(), cmap = "hot")
         axs[0,1].axis("off")
-        axs[1,1].hist(n_error)
+        axs[1,1].hist(error.detach().cpu().numpy().squeeze())
         axs[0,2].imshow(th, cmap = "hot")
         axs[0,2].axis("off")
-        axs[1,2].hist(th)
+        axs[1,2].imshow(masked_img)
 
         plt.savefig(save_path+image[:-4]+'_sl'+str(id)+'.png')
         plt.close()
