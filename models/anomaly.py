@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from scipy.ndimage.filters import gaussian_filter
+
 import numpy as np
 import lpips
 import cv2
@@ -17,8 +19,8 @@ class Anomaly:
         num = x - np.min(x)
         den = p_a - np.min(x)
         
-        n_x = np.zeros((x.shape[0], x.shape[1]))
-        n_x = np.divide(num, den, out=n_x, where=den!=0)
+        out = np.zeros((x.shape[0], x.shape[1]))
+        n_x = np.divide(num, den, out=out, where=den!=0)
         return n_x.clip(0,1)
 
     def anomaly(self, x, y):
