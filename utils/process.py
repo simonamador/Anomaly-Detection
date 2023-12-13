@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, Subset
 
 import numpy as np
+from scipy.ndimage.filters import gaussian_filter
 import cv2
 import imutils
 import operator
@@ -15,6 +16,17 @@ def threshold(img):
     ret, th = cv2.threshold(img_norm, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return img_norm, th
 
+def normalize(x, a):
+    p = np.percentile(x, a)
+
+    num = x-np.min(x)
+    den = p-np.min(x)
+
+    out = np.zeros((x.shape[0], x.shape[1]))
+    x = np.divide(num, den, out=out, where=den!=0)
+
+    return x.clip(0, 1)
+
 def mask_builder(input, recon, lpips_vgg, device):
 
     clahe = cv2.createCLAHE(clipLimit=2,
@@ -24,24 +36,26 @@ def mask_builder(input, recon, lpips_vgg, device):
     eq_recon = clahe.apply((255*recon).astype(np.uint8))
     dif = abs(eq_recon - eq_input)
 
-    p95 = np.percentile(dif, 95)
-    if p95>0:
-        norm95 = (dif*1.0 / p95).clip(0, 1)
-    else:
-        norm95 = dif.clip(0, 1)
+    norm95 = normalize(dif, 95)
 
-    input = np.expand_dims(np.expand_dims(input, axis=0).repeat(3, axis=0),axis=0)
-    recon = np.expand_dims(np.expand_dims(recon, axis=0).repeat(3, axis=0),axis=0)
+    input = np.expand_dims(np.expand_dims(input, axis=0), axis=0)
+    recon = np.expand_dims(np.expand_dims(recon, axis=0), axis=0)
     input = torch.from_numpy(input).type(torch.float).to(device)
     recon = torch.from_numpy(recon).type(torch.float).to(device)
     
-    slpips = lpips_vgg(input, recon, normalize=True).cpu().detach().numpy().squeeze()
+    # slpips = lpips_vgg(input, recon, normalize=True).cpu().detach().numpy().squeeze()
 
-    m = norm95*slpips
-    m = m * 255/np.max(m)
-    m99 = np.percentile(m, 99)
-    ret, b_m = cv2.threshold(m,m99-.5,255,cv2.THRESH_BINARY)
-    return b_m
+    m = norm95
+
+    # m = normalize(m,95)
+
+    m95 = np.percentile(m, 98)
+    m[m>m95] = 1
+    m[m<1] = 0
+    f_m = gaussian_filter(m, sigma=1.2)
+    f_m[f_m>0.3] = 1
+    f_m[f_m<1] = 0
+    return f_m
 
 def resizing(img, target):
     if (img.shape > np.array(target)).any():
@@ -60,7 +74,7 @@ def resizing(img, target):
 # performs image extraction according to the view, normalization and convertion to tensor.
 
 class img_dataset(Dataset):
-    def __init__(self, root_dir, view, key, size: int = 158, horizontal_flip: bool = False, 
+    def __init__(self, root_dir, view, key, data = 'healthy', size: int = 158, horizontal_flip: bool = False, 
                  vertical_flip: bool = False, rotation_angle: int = None):
         self.root_dir = root_dir
         self.view = view
@@ -69,6 +83,7 @@ class img_dataset(Dataset):
         self.angle = rotation_angle
         self.size = size
         self.key = key
+        self.data = data
 
     def __len__(self):
         if self.view == 'L':
@@ -81,11 +96,14 @@ class img_dataset(Dataset):
     
     def extract_age(self):
         csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/extract_data.csv'
-
+        id = 'Study ID'
+        if self.data == 'vm':
+            csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/ventriculomegaly-data.csv'
+            id = 'subject'
         with open(csv_path, 'r') as csvfile:
             csvreader = csv.DictReader(csvfile)
             for row in csvreader:
-                if row['Study ID'] == self.key:
+                if row[id] == self.key:
                     ga = float(row['GA'])
         ga = np.expand_dims(ga, axis = 0)
         ga = torch.tensor(ga).type(torch.float)
@@ -97,11 +115,13 @@ class img_dataset(Dataset):
         return y_rot.astype(np.float64)
 
     def normalize_95(self, x):
-        p95 = np.percentile(x, 95)
-        if p95>0:
-            return (x*1.0 / p95).clip(0, 1)
-        else:
-            return x.clip(0, 1)
+        p98 = np.percentile(x, 98)
+        num = x-np.min(x)
+        den = p98-np.min(x)
+        out = np.zeros((x.shape[0], x.shape[1]))
+
+        x = np.divide(num, den, out=out, where=den!=0)
+        return x.clip(0, 1)
 
     def __getitem__(self, idx):
         raw = nib.load(self.root_dir).get_fdata()
@@ -147,32 +167,15 @@ def center_slices(view):
 
 def data_augmentation(base_set, path, view, key, h, ids):
     transformations = {1: (True, None),
-                       2: (False, 1), 3: (True, 1),
-                       4: (False, 2), 5: (True, 2),
-                       6: (False, 3), 7: (True, 3),
-                       8: (False, 4), 9: (True, 4),
-                       10: (False, 5), 11: (True, 5),
-                       12: (False, 6), 13: (True, 6),
-                       14: (False, 7), 15: (True, 7),
-                       16: (False, 8), 17: (True, 8),
-                       18: (False, 9), 19: (True, 9),
-                       20: (False, 10), 21: (True, 10),
-                       22: (False, -1), 23: (True, -1),
-                       24: (False, -2), 25: (True, -2),
-                       26: (False, -3), 27: (True, -3),
-                       28: (False, -4), 29: (True, -4),
-                       30: (False, -5), 31: (True, -5),
-                       32: (False, -6), 33: (True, -6),
-                       34: (False, -7), 35: (True, -7),
-                       36: (False, -8), 37: (True, -8),
-                       38: (False, -9), 39: (True, -9),
-                       40: (False, -10), 41: (True, -10)}
+                       2: (False, -10, 10), 3: (True, -10, 10),
+                       4: (False, -10, 10), 5: (True, -10, 10),
+                       6: (False, -10, 10), 7: (True, -10, 10),
+                       8: (False, -10, 10), 9: (True, -10, 10)}
     
     for x, specs in transformations.items():
         aug = img_dataset(path, view, key, size = h, horizontal_flip = specs[0], rotation_angle = specs[1])
         aug = Subset(aug,ids)
         base_set = torch.utils.data.ConcatDataset([base_set, aug])
-    
     return base_set
 
 def loader(source_path, view, batch_size, h):
@@ -209,10 +212,10 @@ def loader(source_path, view, batch_size, h):
     val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
     return train_final, val_final
 
-def val_loader(val_path, view):
+def val_loader(val_path, view, key, data='healthy'):
 
     ids = center_slices(view)
-    val_set = img_dataset(val_path,view)
+    val_set = img_dataset(val_path,view, key, data=data)
 
     val_set = Subset(val_set,ids)
 

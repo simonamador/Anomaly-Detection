@@ -19,17 +19,3 @@ ms_ssim_loss = losses.MultiScaleLoss(loss = losses.SSIMLoss(spatial_dims = 2, wi
                                      scales = [0.5, 1.0, 2.0, 4.0, 8.0])
 
 perceptual_loss = losses.PerceptualLoss(spatial_dims = 2, network_type = 'radimagenet_resnet50')
-    
-# class l1_ssim_loss(nn.Module):
-#     def __init__(self, alpha = 0.84):
-#         self.ssim = ssim_loss
-#         self.win = gaussian_1d
-#         self.alpha = alpha
-#     def forward(self, x, y):
-#         A = self.alpha * self.ssim.forward(x, y)
-#         B = (1-self.alpha) * torch.abs(
-#             (separable_filtering(y, [self.win(1.5).to(y)] * (x.ndim -2))) - 
-#             (separable_filtering(x, [self.win(1.5).to(y)] * (x.ndim -2))))
-#         return 100 * (A + B)
-
-# mixed_loss = l1_ssim_loss()

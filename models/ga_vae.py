@@ -92,11 +92,10 @@ class Encoder(nn.Module):
         std = torch.exp(log_std)
         z_dist = dist.Normal(mu, std)
 
-        if self.method == 'multiplication':
-            z_dist = z_dist *ga
-
         z_sample = z_dist.rsample()
 
+        if self.method == 'multiplication':
+            z_sample = z_sample *ga
 
         if self.model != 'bVAE':
             return z_sample

@@ -20,13 +20,10 @@ date <- "20231113"
 for (view in views) {
 
   if (view == "L") {
-    l <- 110
     name <- "sagittal"
   } else if (view == "A") {
-    l <- 158
     name <- "frontal"
   } else {
-    l <- 126
     name <- "axial"
   }
 
