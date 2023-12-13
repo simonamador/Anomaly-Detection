@@ -3,18 +3,12 @@ from torch.utils.data import Dataset, DataLoader, Subset
 
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter
-import cv2
+from skimage import exposure
 import imutils
 import operator
 import os
 import csv
 import nibabel as nib
-
-def threshold(img):
-    img_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
-    img_norm[np.where(img_norm>100)] = 0
-    ret, th = cv2.threshold(img_norm, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    return img_norm, th
 
 def normalize(x, a):
     p = np.percentile(x, a)
@@ -27,35 +21,34 @@ def normalize(x, a):
 
     return x.clip(0, 1)
 
-def mask_builder(input, recon, lpips_vgg, device):
-
-    clahe = cv2.createCLAHE(clipLimit=2,
-	    tileGridSize=(11, 11))
+def mask_builder(input, recon, lpips_vgg, device,mask=False):
   
-    eq_input = clahe.apply((255*input).astype(np.uint8))
-    eq_recon = clahe.apply((255*recon).astype(np.uint8))
-    dif = abs(eq_recon - eq_input)
+    eq_input = exposure.equalize_adapthist(normalize(input,95))
+    eq_recon = exposure.equalize_adapthist(normalize(recon,95))
+    dif = abs(eq_input - eq_recon)
 
     norm95 = normalize(dif, 95)
 
-    input = np.expand_dims(np.expand_dims(input, axis=0), axis=0)
-    recon = np.expand_dims(np.expand_dims(recon, axis=0), axis=0)
+    input = np.expand_dims(np.expand_dims(normalize(input,95), axis=0), axis=0)
+    recon = np.expand_dims(np.expand_dims(normalize(recon,95), axis=0), axis=0)
     input = torch.from_numpy(input).type(torch.float).to(device)
     recon = torch.from_numpy(recon).type(torch.float).to(device)
     
-    # slpips = lpips_vgg(input, recon, normalize=True).cpu().detach().numpy().squeeze()
+    saliency = lpips_vgg(2*input-1, 2*recon-1, normalize=True).cpu().detach().numpy().squeeze()
+    saliency = gaussian_filter(saliency, sigma=1.2)
 
-    m = norm95
+    m = norm95*(saliency-0.25).clip(0,1)
 
-    # m = normalize(m,95)
-
-    m95 = np.percentile(m, 98)
-    m[m>m95] = 1
-    m[m<1] = 0
-    f_m = gaussian_filter(m, sigma=1.2)
-    f_m[f_m>0.3] = 1
-    f_m[f_m<1] = 0
-    return f_m
+    if mask == True:
+        m95 = np.percentile(m, 95)
+        m[m>m95] = 1
+        m[m<1] = 0
+        f_m = gaussian_filter(m, sigma=1.2)
+        f_m[f_m>0.1] = 1
+        f_m[f_m<1] = 0
+        return f_m, saliency
+    else:
+        return mask
 
 def resizing(img, target):
     if (img.shape > np.array(target)).any():

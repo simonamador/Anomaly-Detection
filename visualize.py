@@ -53,8 +53,7 @@ torch.cuda.empty_cache()
 encoder = torch.nn.DataParallel(encoder).to(device)
 decoder = torch.nn.DataParallel(decoder).to(device)
 
-# lpips_vgg = lpips.LPIPS(pretrained = True, net = 'alex', eval_mode = True, spatial = True, lpips = True).to(device)
-
+lpips_vgg = lpips.LPIPS(pretrained = True, net = 'squeeze', eval_mode = True, spatial = True, lpips = True).to(device)
 
 if anomaly == 'vm':
     img_path = 'Ventriculomegaly/recon_img/'
@@ -71,7 +70,6 @@ for idx,image in enumerate(images):
     print('-'*20)
     print(f'Currently in image {idx+1} of {len(images)}')
     val_path = path + img_path + image
-
     if anomaly == 'vm':
         loader = val_loader(val_path, view, image[:-4], data='vm')
     else:
@@ -91,7 +89,7 @@ for idx,image in enumerate(images):
         img = img.detach().cpu().numpy().squeeze()
         recon = recon.detach().cpu().numpy().squeeze()
 
-        th = mask_builder(img, recon, 0, device)
+        th, sal = mask_builder(img, recon, lpips_vgg, device)
 
         masked_img = np.repeat(np.expand_dims(recon.clip(0,1),axis=-1), 3, axis =-1)
         mask_r = np.expand_dims(th,axis=-1)*0.56
@@ -99,9 +97,9 @@ for idx,image in enumerate(images):
         mask_b = np.expand_dims(th,axis=-1)*0.56
         mask = np.concatenate((mask_r,mask_b,mask_g),axis=-1)
         for ch in range(3):
-             for x in range(158):
-                  for y in range(158):
-                       if mask[x,y,ch]>0:
+            for x in range(158):
+                for y in range(158):
+                    if mask[x,y,ch]>0:
                             masked_img[x,y,ch] = mask[x,y,ch]
         
         fig, axs = plt.subplots(2,3)
@@ -111,10 +109,12 @@ for idx,image in enumerate(images):
         axs[1,0].axis("off")
         axs[0,1].imshow(error.detach().cpu().numpy().squeeze(), cmap = "hot")
         axs[0,1].axis("off")
-        axs[1,1].hist(error.detach().cpu().numpy().squeeze())
-        axs[0,2].imshow(th, cmap = "hot")
+        axs[1,1].imshow(sal, cmap = "winter")
+        axs[1,1].axis("off")
+        axs[0,2].imshow(-th, cmap = "binary")
         axs[0,2].axis("off")
         axs[1,2].imshow(masked_img)
+        axs[1,2].axis("off")
 
         plt.savefig(save_path+image[:-4]+'_sl'+str(id)+'.png')
         plt.close()

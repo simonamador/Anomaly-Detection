@@ -50,7 +50,7 @@ torch.cuda.empty_cache()
 encoder = torch.nn.DataParallel(encoder).to(device)
 decoder = torch.nn.DataParallel(decoder).to(device)
 
-# lpips_vgg = lpips.LPIPS(pretrained = True, net = 'alex', eval_mode = True, spatial = True, lpips = True).to(device)
+lpips_vgg = lpips.LPIPS(pretrained = True, net = 'squeeze', eval_mode = True, spatial = True, lpips = True).to(device)
 
 if anomaly == 'vm':
     img_path = 'Ventriculomegaly/recon_img/'
@@ -89,7 +89,7 @@ for idx,image in enumerate(images):
         anomaly_map = np.mean(mask_builder(
             img.detach().cpu().numpy().squeeze(), 
             recon.detach().cpu().numpy().squeeze(), 
-            0, device))
+            lpips_vgg, device))
 
         writer.write(image[:-4]+', '+str(id+1)+', '+str(MAE)+
                      ', '+str(MSE)+', '+str(SSIM.item())+', '+
