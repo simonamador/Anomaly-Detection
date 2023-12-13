@@ -95,7 +95,6 @@ def train(train_ds, val_ds, h, w, z_dim, base, mtype, epochs, loss, beta=None, g
 
     step = 0
     best_loss = 10000
-    not_improved = 0
 
     # Trains for all epochs
     for epoch in range(epochs):
@@ -112,25 +111,20 @@ def train(train_ds, val_ds, h, w, z_dim, base, mtype, epochs, loss, beta=None, g
             if model == 'bVAE':
                 if base == 'default':
                     z, mu, log_var = encoder(img)
-                    x_recon = decoder(z)
-                    kld_loss = loss_lib.kld_loss(mu, log_var)
-                    ed_loss = loss(x_recon,img) + (beta * kld_loss)
                 else:
                     ga = data['ga'].to(device)
                     z, mu, log_var = encoder(img, ga)
-                    x_recon = decoder(z)
-                    kld_loss = loss_lib.kld_loss(mu, log_var)
-                    ed_loss = loss(x_recon,img) + (beta * kld_loss)
+                x_recon = decoder(z)
+                kld_loss = loss_lib.kld_loss(mu, log_var)
+                ed_loss = loss(x_recon,img) + (beta * kld_loss)
             else:
                 if base == 'default':
                     z = encoder(img)
-                    x_recon = decoder(z)
-                    ed_loss = loss(x_recon,img)
                 else:
                     ga = data['ga'].to(device)
                     z = encoder(img, ga)
-                    x_recon = decoder(z)
-                    ed_loss = loss(x_recon,img)
+                x_recon = decoder(z)
+                ed_loss = loss(x_recon,img)
 
             optimizer.zero_grad()
             ed_loss.backward()
@@ -148,8 +142,8 @@ def train(train_ds, val_ds, h, w, z_dim, base, mtype, epochs, loss, beta=None, g
             metrics = validation(val_ds, encoder, decoder, loss, base, model, beta=beta)
         val_loss = metrics[0].item()
 
-        print('train_loss: {:.4f}'.format(tr_loss))
-        print('val_loss: {:.4f}'.format(val_loss))
+        print('train_loss: {:.6f}'.format(tr_loss))
+        print('val_loss: {:.6f}'.format(val_loss))
 
         writer.write(str(epoch+1) + ', ' + str(tr_loss)+ ', ' + str(val_loss)+ ', ' + 
                      str(metrics[1].item())+ ', ' + str(metrics[2].item())+ ', ' + 
@@ -178,12 +172,6 @@ def train(train_ds, val_ds, h, w, z_dim, base, mtype, epochs, loss, beta=None, g
                 'decoder': decoder.state_dict(),
             }, model_path + f'/decoder_best.pth')
             print(f'saved best model in epoch: {epoch+1}')
-            not_improved = 0
-        else:
-            not_improved += 1
-    
-        if not_improved > 20:
-            break
 
     writer.close()
 
@@ -241,6 +229,8 @@ if __name__ == '__main__':
         os.mkdir(results_path)
         
     folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}".format(view,model,loss_type,batch_size,date)
+    if base == 'ga_VAE':
+        folder_name += 'ga_VAE'
     tensor_path = results_path + folder_name + '/history.txt'
     model_path = results_path + folder_name + '/Saved_models/'
     if not os.path.exists(results_path + folder_name):
@@ -254,6 +244,8 @@ if __name__ == '__main__':
 
     if loss_type == 'L2':
         loss = loss_lib.l2_loss
+    elif loss_type == 'L1':
+        loss = loss_lib.l1_loss
     elif loss_type == 'SSIM':
         loss = loss_lib.ssim_loss
     elif loss_type == 'MS_SSIM':

@@ -62,7 +62,9 @@ def settings_parser():
     parser.add_argument('--loss',
         dest='loss',
         default='SSIM',
-        choices=['L2', 'SSIM', 'MS_SSIM', 'Mixed', 'Perceptual'],
+        choices=['L2', 'L1', 'SSIM', 'MS_SSIM', 
+                 'Mixed1', 'Mixed2', 'Mixed3', 'Mixed4',
+                 'Perceptual'],
         required=False,
         help='''
         Loss function:

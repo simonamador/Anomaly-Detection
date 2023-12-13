@@ -1,10 +1,14 @@
-from models.vae import Encoder, Decoder
 from collections import OrderedDict
 import torch
 
-def load_model(model_path, w, h, z_dim):
+def load_model(model_path, base, ga_method, w, h, z_dim):
 
-    encoder = Encoder(w,h,z_dim*2)
+    if base == 'ga_VAE':
+        from models.ga_vae import Encoder, Decoder
+        encoder = Encoder(w,h,z_dim*2, method = ga_method)
+    else:
+        from models.vae import Encoder, Decoder
+        encoder = Encoder(w,h,z_dim*2)
     decoder = Decoder(w,h,z_dim)
 
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
