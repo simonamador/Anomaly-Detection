@@ -62,13 +62,6 @@ class ResUp(nn.Module):
         x = self.basic2(self.basic1(x))
         return residual + x
 
-'''class SA(nn.Module):
-    dum
-
-class RESA(nn.Module):
-    dum
-'''
-
 # Encoder class builds encoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the output z-parameters), model (the model type)
 class Encoder(nn.Module):
