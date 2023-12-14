@@ -47,6 +47,7 @@ class Anomaly:
         return torch.cat(saliencies, 0)
     
     def mask_generation(self, x, th=95):
+        masks = []
         for batch in range(x.shape[0]):
             x_b = self.normalize(x[batch][0].cpu().detach().numpy())
             p_th = np.perecentile(x_b, th)
@@ -57,10 +58,11 @@ class Anomaly:
             
             f_m = m
             f_m = gaussian_filter(np.asarray(f_m), sigma=1.2)
-            f_m = torch.Tensor(f_m).to(x.device)
+            f_m = torch.from_numpy(f_m).to(x.device)
             
             f_m[f_m>0.1]=1
             f_m[f_m<1]=0
+            f_m = np.expand_dims(f_m, 0)
 
-            f_m.append(np.expand_dims(f_m, 0))
+            masks.append(f_m)
         return f_m

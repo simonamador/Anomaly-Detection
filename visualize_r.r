@@ -11,7 +11,7 @@ losses <- c("L2", "SSIM", "MS_SSIM")
 extras <- c("0.1_", "1.0_", "10.0_", "100.0_")
 
 view <- "L"
-extra <- "ga_VAE"
+extra <- ""
 model <- "default"
 loss <- "L2"
 batch <- "64"

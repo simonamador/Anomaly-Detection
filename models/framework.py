@@ -7,6 +7,7 @@ import torch
 
 class Framework(nn.Module):
     def __init__(self, n, z_dim, method, device, model='default', ga: bool=False):
+        super(Framework, self).__init__()
         self.z = z_dim
         self.ga = ga
         self.method = method

@@ -90,14 +90,6 @@ class Encoder(nn.Module):
             self.step1 = ResDown(ch,ch * 2, k_size=k_size, stride=stride)
             self.step2 = ResDown(ch * 2,ch * 4, k_size=k_size, stride=stride)
             self.step3 = ResDown(ch * 4,ch * 8, k_size=k_size, stride=stride)
-            '''elif model == 'self-attention':
-                self.step1 = SA(ch,ch * 2)
-                self.step2 = SA(ch * 2,ch * 4)
-                self.step3 = SA(ch * 4,ch * 8)
-            elif model == 'full':
-                self.step1 = RESA(ch,ch * 2)
-                self.step2 = RESA(ch * 2,ch * 4)
-            self.step3 = RESA(ch * 4,ch * 8)'''
         else:
             raise AttributeError("Model is not valid")
         
@@ -155,14 +147,6 @@ class Decoder(nn.Module):
             self.step1 = ResUp(self.ch * 8, self.ch * 4, k_size=self.k_size, stride=self.stride)
             self.step2 = ResUp(self.ch * 4, self.ch * 2, k_size=self.k_size, stride=self.stride)
             self.step3 = ResUp(self.ch * 2, self.ch, k_size=self.k_size, stride=self.stride)
-            '''elif model == 'self-attention':
-                self.step1 = SA(ch,ch * 2)
-                self.step2 = SA(ch * 2,ch * 4)
-                self.step3 = SA(ch * 4,ch * 8)
-            elif model == 'all':
-                self.step1 = RESA(ch,ch * 2)
-                self.step2 = RESA(ch * 2,ch * 4)
-            self.step3 = RESA(ch * 4,ch * 8)'''
         else:
             raise AttributeError("Model is not valid")
         
