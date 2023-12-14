@@ -1,14 +1,14 @@
 from collections import OrderedDict
 import torch
 
-def load_model(model_path, base, ga_method, w, h, z_dim):
+def load_model(model_path, base, ga_method, w, h, z_dim, model='default'):
 
     if base == 'ga_VAE':
         from models.ga_vae import Encoder, Decoder
-        encoder = Encoder(w,h,z_dim*2, method = ga_method)
+        encoder = Encoder(w,h,z_dim*2, method = ga_method, model = model)
     else:
         from models.vae import Encoder, Decoder
-        encoder = Encoder(w,h,z_dim*2)
+        encoder = Encoder(w,h,z_dim*2, model=model)
     decoder = Decoder(w,h,z_dim)
 
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))

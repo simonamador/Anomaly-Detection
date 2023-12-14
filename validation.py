@@ -40,7 +40,7 @@ model_path = path + '/Results/' + model_name + '/Saved_models/'
 
 h = w = 158
 
-encoder, decoder = load_model(model_path, base, args.ga_method, h, w, z_dim)
+encoder, decoder = load_model(model_path, base, args.ga_method, h, w, z_dim, model=model)
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu

@@ -91,7 +91,7 @@ for idx,image in enumerate(images):
 
         th, sal = mask_builder(img, recon, lpips_vgg, device)
 
-        masked_img = np.repeat(np.expand_dims(recon.clip(0,1),axis=-1), 3, axis =-1)
+        masked_img = np.repeat(np.expand_dims(img.clip(0,1),axis=-1), 3, axis =-1)
         mask_r = np.expand_dims(th,axis=-1)*0.56
         mask_g = np.expand_dims(th,axis=-1)*0.93
         mask_b = np.expand_dims(th,axis=-1)*0.56

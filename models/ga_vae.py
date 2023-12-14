@@ -40,6 +40,7 @@ class Encoder(nn.Module):
             h,
             w,
             z_dim,
+            model: str = 'default',
             method: str = 'multiplication'
         ):
 
@@ -52,6 +53,7 @@ class Encoder(nn.Module):
         k_size = 4
         stride = 2
         self.method = method
+        self.model = model
 
         # Reduce dimension size by 1 to account for the concatenation of GA
         if method == 'concat':
