@@ -45,8 +45,8 @@ class Trainer:
         
         self.optimizer_e = optim.Adam(self.model.encoder.parameters(), lr=1e-4, weight_decay=1e-5)
         self.optimizer_d = optim.Adam(self.model.decoder.parameters(), lr=1e-4, weight_decay=1e-5)
-        self.optimizer_netG = optim.Adam(self.model.refineG.parameters(), lr=1e-4)
-        self.optimizer_netD = optim.Adam(self.model.refineD.parameters(), lr=1e-4)
+        self.optimizer_netG = optim.Adam(self.model.refineG.parameters(), lr=5.0e-5)
+        self.optimizer_netD = optim.Adam(self.model.refineD.parameters(), lr=5.0e-5)
 
     def train_inpainting(self, epochs):
 
