@@ -7,19 +7,22 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 
 from models.framework import Framework
-from utils.process import loader
-from utils.load_model import load_model
+from utils.config import loader, load_model
 from utils import loss as loss_lib
 
 class Trainer:
     def __init__(self, source_path, model_path, tensor_path,
-                 image_path, device, z_dim, ga, method, model, 
+                 image_path, device, batch, z_dim, method, model, 
                  base, view, n, pretrained, pretrained_path):
         
+        if base == 'ga_VAE':
+            self.ga = True
+        else:
+            self.ga = False
+
         self.device = device
-        self.ga = ga
-        self.model = model
-        self.model = Framework(n, z_dim, method, device, model, ga)  
+        self.model_type = model
+        self.model = Framework(n, z_dim, method, device, model, self.ga) 
         self.model_path = model_path  
         self.tensor_path = tensor_path 
         self.image_path = image_path   
@@ -31,12 +34,12 @@ class Trainer:
 
         self.loss_keys = {'L1': 1, 'Style': 250, 'Perceptual': 0.1}
         self.losses = {'L1':loss_lib.l1_loss,
-                'Style':loss_lib.Style,
-                'Perceptual':loss_lib.Perceptual}
-        self.adv_loss = loss_lib.smgan
+                'Style':loss_lib.Style(),
+                'Perceptual':loss_lib.Perceptual()}
+        self.adv_loss = loss_lib.smgan()
         self.adv_weight = 0.01
 
-        train_dl, val_dl = loader(source_path, view)
+        train_dl, val_dl = loader(source_path, view, batch, n)
 
         self.loader = {"tr": train_dl, "ts": val_dl}
         
@@ -45,7 +48,9 @@ class Trainer:
         self.optimizer_netG = optim.Adam(self.model.refineG.parameters(), lr=1e-4)
         self.optimizer_netD = optim.Adam(self.model.refineD.parameters(), lr=1e-4)
 
-    def train_inpainting(self, epochs, tensor_path):
+    def train_inpainting(self, epochs):
+
+        current_loader = self.loader["tr"]
         
         for param in self.model.encoder.parameters():
             param.requires_grad = False
@@ -55,10 +60,8 @@ class Trainer:
             param.requires_grad = True
         for param in self.model.refineD.parameters():
             param.requires_grad = True
-
-        self.model = DataParallel(self.model).to(self.device)
         
-        self.writer = open(tensor_path, 'w')
+        self.writer = open(self.tensor_path, 'w')
         self.writer.write('Epoch, Train_loss, Val_loss, SSIM, MSE, MAE'+'\n')
 
         self.best_loss = 10000
@@ -67,19 +70,20 @@ class Trainer:
         for epoch in range(epochs):
             print('-'*15)
             print(f'epoch {epoch+1}/{epochs}')
-            self.model.train()
+
+            model = DataParallel(self.model).to(self.device)
+            model.train()
 
             epoch_refineG_loss, epoch_refineD_loss = 0.0, 0.0,
-
-            for data in self.loader["tr"]:
+            for data in current_loader:
                 img = data['image'].to(self.device)
 
-                if self.ga == True:
+                if self.ga:
                     ga = data['ga'].to(self.device)
-                    anomap, res_dic = self.model(img, ga)
+                    anomap, res_dic = model(img, ga)
                 else:
-                    anomap, res_dic = self.model(img)
-                
+                    anomap, res_dic = model(img)
+
                 losses = {}
                 for name, weight in self.loss_keys.items():
                     losses[name] = weight * self.losses[name](res_dic["y_ref"], img)
@@ -101,9 +105,12 @@ class Trainer:
             epoch_refineG_loss /= len(self.loader["ts"])
             epoch_refineD_loss /= len(self.loader["ts"])
 
-            val_loss, metrics, images = self.test()
+            test_dic = self.test()
+            val_loss = test_dic["losses"] 
+            metrics = test_dic["metrics"] 
+            images = test_dic["images"] 
 
-            self.log(self, epoch, epochs, [epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics, images)
+            self.log(epoch, epochs, [epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics, images)
 
             print('train_loss: {:.6f}'.format(epoch_refineG_loss))
             print('val_loss: {:.6f}'.format(val_loss[0]))
@@ -120,7 +127,7 @@ class Trainer:
             for data in self.loader["ts"]:
                 img = data['image'].to(self.device)
 
-                if self.ga == True:
+                if self.ga:
                     ga = data['ga'].to(self.device)
                     anomap, res_dic = self.model(img, ga)
                 else:
@@ -149,8 +156,8 @@ class Trainer:
             ssim /= len(self.loader["ts"])
             anom /= len(self.loader["ts"])    
 
-            images = {"input": images[0], "recon": res_dic["x_recon"][0], "saliency": res_dic["saliency"][0],
-                      "mask": res_dic["masks"][0], "ref_recon": res_dic["y_ref"][0], "anomaly": anomap[0]}    
+            images = {"input": img[0], "recon": res_dic["x_recon"][0], "saliency": res_dic["saliency"][0],
+                      "mask": -res_dic["mask"][0], "ref_recon": res_dic["y_ref"][0], "anomaly": anomap[0]}    
         
         return {'losses': [refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom], 'images': images}
 
@@ -161,10 +168,14 @@ class Trainer:
                           str(tr_loss[1]) + ', ' +
                           str(val_loss[0]) + ', ' +
                           str(val_loss[1]) + ', ' +
-                          str(metrics[0].item()) + ', ' +
-                          str(metrics[1].item()) + ', ' +
-                          str(metrics[2].item()) + ', ' +
-                          str(metrics[3].item()) + '\n')
+                          str(metrics[0]) + ', ' +
+                          str(metrics[1]) + ', ' +
+                          str(metrics[2]) + ', ' +
+                          str(metrics[3]) + '\n')
+        
+        if epoch == 0:
+            progress_im = self.plot(images)
+            progress_im.savefig(self.image_path+'epoch_'+str(epoch+1)+'.png')
 
         if (epoch + 1) % 50 == 0 or (epoch + 1) == epochs:
             torch.save({
@@ -212,14 +223,14 @@ class Trainer:
                 'refineD': self.model.refineD.state_dict(),
             }, model_path + f'/best_refineD.pth')
 
-    def plot(images):
+    def plot(self, images):
         fig, axs = plt.subplots(2,3)
         names = [["input", "recon", "ref_recon"], ["saliency", "anomaly", "mask"]]
-        cmap_i = ["gray", "heat"]
+        cmap_i = ["gray", "hot"]
         for x in range(2):
             for y in range(3):
                 if x == 1 and y == 2:
                     cmap_i[1] = "binary"
-                axs[x,y].imshow(images[names[x,y]].detach().cpu().numpy().squeeze(), cmap = cmap_i[x])
-                axs[x,y].axis("off")
+                axs[x, y].imshow(images[names[x][y]].detach().cpu().numpy().squeeze(), cmap = cmap_i[x])
+                axs[x, y].axis("off")
         return fig

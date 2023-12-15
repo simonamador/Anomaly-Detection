@@ -5,7 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 
-from common import BaseNetwork
+from models.aotgan.common import BaseNetwork
+
 
 class InpaintGenerator(BaseNetwork):
     def __init__(self, rates='1+2+4+8', block_num=8):  # 1046
@@ -96,9 +97,9 @@ def my_layer_norm(feat):
     return feat
 
 # ----- discriminator -----
-class InpaintDiscriminator(BaseNetwork):
+class Discriminator(BaseNetwork):
     def __init__(self, ):
-        super(InpaintDiscriminator, self).__init__()
+        super(Discriminator, self).__init__()
         inc = 1
         self.conv = nn.Sequential(
             spectral_norm(nn.Conv2d(inc, 64, 4, stride=2, padding=1, bias=False)),

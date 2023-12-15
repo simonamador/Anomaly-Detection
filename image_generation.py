@@ -1,9 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 
-from utils.load_model import load_model
-from utils.process import val_loader
-from config.parser_module import settings_parser
+from utils.config import load_model, val_loader, settings_parser
 
 parser = settings_parser()
 args = parser.parse_args()

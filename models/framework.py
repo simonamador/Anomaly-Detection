@@ -1,5 +1,6 @@
-from anomaly import Anomaly
-import aotgan.aotgan as inpainting
+from models.anomaly import Anomaly
+import models.aotgan.aotgan as inpainting
+import copy
 import torch.nn as nn
 import torch
 
@@ -14,14 +15,14 @@ class Framework(nn.Module):
 
         self.anomap = Anomaly(device)
         self.refineG = inpainting.InpaintGenerator().to(device)
-        self.refineD = inpainting.InpaintDiscriminator().to(device)
+        self.refineD = inpainting.Discriminator().to(device)
 
         if ga:
-            from ga_vae import Encoder, Decoder
+            from models.ga_vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, method)
             self.decoder = Decoder(n, n, z_dim)
         else:
-            from vae import Encoder, Decoder
+            from models.vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, model = model)
             self.decoder = Decoder(n, n, z_dim, model = model)
 
@@ -40,17 +41,19 @@ class Framework(nn.Module):
             else: 
                 z = self.encoder(x_im)
 
-        x_recon = self.decode(z)
-
-        anom, saliency = self.anomap.anomaly(x_recon.detach(), x_im)
+        x_recon = self.decoder(z)
+        saliency, anom = self.anomap.anomaly(x_recon, x_im)
+        
         anom = anom*(saliency-0.25)
 
         masks = self.anomap.mask_generation(anom, 95)
 
-        x_ref = (x_im.detach()*(1-masks).float()) + masks
+        x_ref = copy.deepcopy(x_im.detach())
+        x_ref = (x_ref*(1-masks).float()) + masks
 
         y_ref = self.refineG(x_ref, masks)
         y_ref = torch.clamp(y_ref, 0, 1)
+        y_ref = self.anomap.zero_pad(y_ref, x_ref.shape[2])
 
         anom_det = x_im * (1-masks) + masks * y_ref
 

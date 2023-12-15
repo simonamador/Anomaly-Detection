@@ -1,10 +1,9 @@
 import torch
 import lpips
 
-from config.parser_module import settings_parser
-from utils.process import mask_builder, val_loader 
+from utils.config import *
+from utils.process import mask_builder 
 from utils.loss import l1_error
-from utils.load_model import load_model
 
 import matplotlib.pyplot as plt
 import numpy as np

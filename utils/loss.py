@@ -3,10 +3,10 @@
 import monai.losses as losses 
 import torch.nn as nn
 import torch
-import torch.functional as F
+import torch.nn.functional as F
 from scipy.ndimage.filters import gaussian_filter
 
-from vgg import VGG19
+from utils.vgg import VGG19
 
 def kld_loss(mu, log_var):
     kld = -0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp())
@@ -89,7 +89,7 @@ class smgan():
             g_fake = F.interpolate(g_fake, size=(ht, wt), mode='bilinear', align_corners=True)
             d_fake = F.interpolate(d_fake, size=(ht, wt), mode='bilinear', align_corners=True)
             d_real = F.interpolate(d_real, size=(ht, wt), mode='bilinear', align_corners=True)
-        d_fake_label = gaussian_filter(masks, sigma=1.2).detach().cuda()
+        d_fake_label = torch.Tensor(gaussian_filter(masks.cpu().detach().numpy(), sigma=1.2)).cuda()
         d_real_label = torch.zeros_like(d_real).cuda()
         g_fake_label = torch.ones_like(g_fake).cuda()
 

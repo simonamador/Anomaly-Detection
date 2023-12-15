@@ -1,36 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.distributions as dist
+from models.vae import Basic
 
 # Author: @simonamador
 
 # The following code builds an autoencoder model for unsupervised learning applications in MRI anomaly detection.
-# The model can be build in 4 types:
-# * Default: 2d Convolutions followed by a flattening and linear transformation
-# * Residual: Includes residual blocks in between convolutions
-# * Self-attention: Includes self-attention modules in between convolutions
-# * Full: Includes both residual blocks and self-attention modules in between convolutions
-
-# Basic class conducts a basic convolution-ReLU activation-batch normalization block.
-# Inputs: input channels, output channels. Optional: kernel size, stride, transpose (true or false, default is false).
-class Basic(nn.Module):
-    def __init__(self, input, output, k_size=3,stride=1,padding=0,transpose=False):
-        super(Basic, self).__init__()
-
-        if transpose == False:
-            self.conv_relu_norm = nn.Sequential(
-                nn.Conv2d(input, output, k_size, padding=padding,stride=stride),
-                nn.LeakyReLU(0.2),
-                nn.BatchNorm2d(output)
-            )
-        else:
-            self.conv_relu_norm = nn.Sequential(
-                nn.ConvTranspose2d(input, output, k_size, padding=padding,stride=stride),
-                nn.LeakyReLU(0.2),
-                nn.BatchNorm2d(output)
-            )
-    def forward(self,x):
-        return self.conv_relu_norm(x)
 
 # Encoder class builds encoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the output z-parameters), model (the model type)

@@ -5,9 +5,8 @@ import torch.optim as optim
 import os
 import time
 
-from utils.process import loader
 from utils import loss as loss_lib
-from config.parser_module import settings_parser
+from utils.config import settings_parser, loader
 
 # Author: @simonamador
 

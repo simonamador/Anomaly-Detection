@@ -1,10 +1,9 @@
 import torch
 import lpips
 
-from utils.process import val_loader, mask_builder
-from utils.load_model import load_model
+from utils.process import mask_builder
+from utils.config import val_loader, load_model, settings_parser
 from utils.loss import ssim_loss, l1_loss, l2_loss
-from config.parser_module import settings_parser
 
 import os
 import numpy as np
