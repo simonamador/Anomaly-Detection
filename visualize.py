@@ -8,7 +8,6 @@ from utils.load_model import load_model
 
 import matplotlib.pyplot as plt
 import numpy as np
-import cv2 as cv
 import os
 
 # Author: @simonamador

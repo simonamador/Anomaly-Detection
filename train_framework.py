@@ -4,8 +4,7 @@ import torch
 from torch.nn import DataParallel
 import torch.optim as optim
 
-import os
-import time
+import matplotlib.pyplot as plt
 
 from models.framework import Framework
 from utils.process import loader
@@ -13,18 +12,20 @@ from utils.load_model import load_model
 from utils import loss as loss_lib
 
 class Trainer:
-    def __init__(self, model_path, source_path, device, 
-                 z_dim, ga, method, model, base, view,
-                 n, pretrained):
+    def __init__(self, source_path, model_path, tensor_path,
+                 image_path, device, z_dim, ga, method, model, 
+                 base, view, n, pretrained, pretrained_path):
         
         self.device = device
         self.ga = ga
         self.model = model
         self.model = Framework(n, z_dim, method, device, model, ga)  
-        self.model_path = model_path      
+        self.model_path = model_path  
+        self.tensor_path = tensor_path 
+        self.image_path = image_path   
 
         if pretrained == True:
-            encoder, decoder = load_model(model_path, base, method, n, n, z_dim, model=model)
+            encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model)
             self.model.encoder = encoder
             self.model.decoder = decoder
 
@@ -100,9 +101,9 @@ class Trainer:
             epoch_refineG_loss /= len(self.loader["ts"])
             epoch_refineD_loss /= len(self.loader["ts"])
 
-            val_loss, metrics = self.test()
+            val_loss, metrics, images = self.test()
 
-            self.log(self, epoch, epochs, [epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics)
+            self.log(self, epoch, epochs, [epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics, images)
 
             print('train_loss: {:.6f}'.format(epoch_refineG_loss))
             print('val_loss: {:.6f}'.format(val_loss[0]))
@@ -146,11 +147,14 @@ class Trainer:
             mse_loss /= len(self.loader["ts"])
             mae_loss /= len(self.loader["ts"])
             ssim /= len(self.loader["ts"])
-            anom /= len(self.loader["ts"])        
-        
-        return {'losses': [refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom]}
+            anom /= len(self.loader["ts"])    
 
-    def log(self, epoch, epochs, tr_loss, val_loss, metrics):
+            images = {"input": images[0], "recon": res_dic["x_recon"][0], "saliency": res_dic["saliency"][0],
+                      "mask": res_dic["masks"][0], "ref_recon": res_dic["y_ref"][0], "anomaly": anomap[0]}    
+        
+        return {'losses': [refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom], 'images': images}
+
+    def log(self, epoch, epochs, tr_loss, val_loss, metrics, images):
         model_path = self.model_path
         self.writer.write(str(epoch+1) + ', ' +
                           str(tr_loss[0]) + ', ' +
@@ -183,6 +187,9 @@ class Trainer:
                 'refineD': self.model.refineD.state_dict(),
             }, model_path + f'/refineD_{epoch + 1}.pth')
 
+            progress_im = self.plot(images)
+            progress_im.savefig(self.image_path+'epoch_'+str(epoch+1)+'.png')
+
         if val_loss[0] < self.best_loss:
             self.best_loss = val_loss[0]
             torch.save({
@@ -204,3 +211,15 @@ class Trainer:
                 'epoch': epoch + 1,
                 'refineD': self.model.refineD.state_dict(),
             }, model_path + f'/best_refineD.pth')
+
+    def plot(images):
+        fig, axs = plt.subplots(2,3)
+        names = [["input", "recon", "ref_recon"], ["saliency", "anomaly", "mask"]]
+        cmap_i = ["gray", "heat"]
+        for x in range(2):
+            for y in range(3):
+                if x == 1 and y == 2:
+                    cmap_i[1] = "binary"
+                axs[x,y].imshow(images[names[x,y]].detach().cpu().numpy().squeeze(), cmap = cmap_i[x])
+                axs[x,y].axis("off")
+        return fig
