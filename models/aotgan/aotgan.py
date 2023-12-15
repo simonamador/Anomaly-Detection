@@ -95,13 +95,10 @@ def my_layer_norm(feat):
     feat = 5 * feat
     return feat
 
-
-
-
 # ----- discriminator -----
 class InpaintDiscriminator(BaseNetwork):
     def __init__(self, ):
-        super(Discriminator, self).__init__()
+        super(InpaintDiscriminator, self).__init__()
         inc = 1
         self.conv = nn.Sequential(
             spectral_norm(nn.Conv2d(inc, 64, 4, stride=2, padding=1, bias=False)),

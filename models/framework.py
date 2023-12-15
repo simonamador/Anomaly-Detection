@@ -6,7 +6,7 @@ import torch
 # Code inspired from https://github.com/ci-ber/PHANES/
 
 class Framework(nn.Module):
-    def __init__(self, n, z_dim, method, device, model='default', ga: bool=False):
+    def __init__(self, n, z_dim, method, device, model, ga):
         super(Framework, self).__init__()
         self.z = z_dim
         self.ga = ga
@@ -49,12 +49,12 @@ class Framework(nn.Module):
 
         x_ref = (x_im.detach()*(1-masks).float()) + masks
 
-        y_ref = self.G(x_ref, masks)
+        y_ref = self.refineG(x_ref, masks)
         y_ref = torch.clamp(y_ref, 0, 1)
 
-        anom_det = x_ref * y_ref
+        anom_det = x_im * (1-masks) + masks * y_ref
 
         if self.method == "beta-VAE":
-            return anom_det, {"mu": mu, "log_var": log_var, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency}
+            return anom_det, {"mu": mu, "log_var": log_var, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "y_ref": y_ref}
         else:
-            return anom_det, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency}
+            return anom_det, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "y_ref": y_ref}
