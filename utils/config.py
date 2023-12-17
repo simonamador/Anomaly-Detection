@@ -208,7 +208,7 @@ def path_generator(args):
         
     folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}".format(
         args.view, args.type, args.loss, args.batch,date)
-    folder_pretrained = "/{0}_{1}_AE_{2}_b{3}_{4}".format(
+    folder_pretrained = "/{0}_{1}_AE_{2}_b64_{4}".format(
         args.view, args.type, args.loss, args.batch,args.date)
 
     if args.model == 'ga_VAE':

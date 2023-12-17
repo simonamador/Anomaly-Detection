@@ -5,6 +5,7 @@ from torch.nn import DataParallel
 import torch.optim as optim
 
 import matplotlib.pyplot as plt
+import copy
 
 from models.framework import Framework
 from utils.config import loader, load_model
@@ -71,8 +72,9 @@ class Trainer:
             print('-'*15)
             print(f'epoch {epoch+1}/{epochs}')
 
-            model = DataParallel(self.model).to(self.device)
-            model.train()
+            encoder = DataParallel(self.model.encoder).to(self.device).train()
+            decoder = DataParallel(self.model.decoder).to(self.device).train()
+            refineG = DataParallel(self.model.refineG).to(self.device).train()
 
             epoch_refineG_loss, epoch_refineD_loss = 0.0, 0.0,
             for data in current_loader:
@@ -80,17 +82,32 @@ class Trainer:
 
                 if self.ga:
                     ga = data['ga'].to(self.device)
-                    anomap, res_dic = model(img, ga)
+                    z = encoder(img, ga)
                 else:
-                    anomap, res_dic = model(img)
+                    z = encoder(img)
+
+                rec = decoder(z)
+                saliency, anomalies = self.model.anomap.anomaly(rec.detach(), img)
+                anomalies = anomalies * saliency
+                masks = self.model.anomap.mask_generation(anomalies)
+
+                x_ref = (img * (1 - masks).float()) + masks
+
+                y_ref = refineG(x_ref, masks)
+                y_ref = torch.clamp(y_ref, 0, 1)
+
+                zero_pad = torch.nn.ZeroPad2d(1)
+                y_ref = zero_pad(y_ref)
+
+                ref_recon = (1-masks)*img + masks*y_ref
 
                 losses = {}
                 for name, weight in self.loss_keys.items():
-                    losses[name] = weight * self.losses[name](res_dic["y_ref"], img)
+                    losses[name] = weight * self.losses[name](y_ref, img)
 
-                dis_loss, gen_loss = self.adv_loss(self.model.refineD, anomap, img, res_dic["mask"])
+                dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks)
 
-                losses['advg'] = gen_loss * self.adv_weight
+                # losses['advg'] = gen_loss * self.adv_weight
                 
                 self.optimizer_netG.zero_grad()
                 self.optimizer_netD.zero_grad()
@@ -129,15 +146,17 @@ class Trainer:
 
                 if self.ga:
                     ga = data['ga'].to(self.device)
-                    anomap, res_dic = self.model(img, ga)
+                    ref_recon, res_dic = self.model(img, ga)
                 else:
-                    anomap, res_dic = self.model(img)
+                    ref_recon, res_dic = self.model(img)
+
+                anomap = abs(ref_recon-img)*self.model.anomap.saliency_map(ref_recon,img)
 
                 losses = {}
                 for name, weight in self.loss_keys.items():
                     losses[name] = weight * self.losses[name](res_dic["y_ref"], img)
 
-                dis_loss, gen_loss = self.adv_loss(self.model.refineD, anomap, img, res_dic["mask"])
+                dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, res_dic["mask"])
 
                 losses['advg'] = gen_loss * self.adv_weight
 
@@ -156,8 +175,8 @@ class Trainer:
             ssim /= len(self.loader["ts"])
             anom /= len(self.loader["ts"])    
 
-            images = {"input": img[0], "recon": res_dic["x_recon"][0], "saliency": res_dic["saliency"][0],
-                      "mask": -res_dic["mask"][0], "ref_recon": res_dic["y_ref"][0], "anomaly": anomap[0]}    
+            images = {"input": img[0][0], "recon": res_dic["x_recon"][0], "saliency": res_dic["saliency"][0],
+                      "mask": -res_dic["mask"][0], "ref_recon": ref_recon[0], "anomaly": anomap[0][0]}    
         
         return {'losses': [refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom], 'images': images}
 
@@ -222,6 +241,7 @@ class Trainer:
                 'epoch': epoch + 1,
                 'refineD': self.model.refineD.state_dict(),
             }, model_path + f'/best_refineD.pth')
+            print(f'saved best model in epoch: {epoch+1}')
 
     def plot(self, images):
         fig, axs = plt.subplots(2,3)

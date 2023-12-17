@@ -55,9 +55,9 @@ class Framework(nn.Module):
         y_ref = torch.clamp(y_ref, 0, 1)
         y_ref = self.anomap.zero_pad(y_ref, x_ref.shape[2])
 
-        anom_det = x_im * (1-masks) + masks * y_ref
+        y_fin = x_im * (1-masks) + masks * y_ref
 
         if self.method == "beta-VAE":
-            return anom_det, {"mu": mu, "log_var": log_var, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "y_ref": y_ref}
+            return y_fin, {"mu": mu, "log_var": log_var, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref}
         else:
-            return anom_det, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "y_ref": y_ref}
+            return y_fin, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref}
