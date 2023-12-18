@@ -23,8 +23,6 @@ ssim_loss = losses.SSIMLoss(spatial_dims=2)
 ms_ssim_loss = losses.MultiScaleLoss(loss = losses.SSIMLoss(spatial_dims = 2, win_size = 5),
                                      scales = [0.5, 1.0, 2.0, 4.0, 8.0])
 
-perceptual_loss = losses.PerceptualLoss(spatial_dims = 2, network_type = 'radimagenet_resnet50')
-
 class Perceptual(nn.Module):
     def __init__(self, weights=[1.0, 1.0, 1.0, 1.0, 1.0]):
         super(Perceptual, self).__init__()

@@ -235,6 +235,13 @@ def path_generator(args):
 def settings_parser():
     parser = argparse.ArgumentParser()
     
+    parser.add_argument('--task',
+        dest='type',
+        choices=['Train', 'Validate'],
+        required=False,
+        default='Train',
+        help='''
+        Task to be performed.''')  
     parser.add_argument('--model',
         dest='model',
         choices=['default', 'ga_VAE'],
