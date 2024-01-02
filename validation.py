@@ -5,6 +5,9 @@ from models.framework import Framework
 
 import torch
 import matplotlib.pyplot as plt
+import scipy.stats as stts
+import seaborn as sns
+import pandas as pd
 import os
 
 class Validator:
@@ -22,13 +25,14 @@ class Validator:
         self.model = Framework(n, z_dim, method, device, model, self.ga)
         self.model.encoder, self.model.decoder = load_model(model_path, base, method, 
                                                             n, n, z_dim, model=model)
+       
+        self.hist_path = path+'Results' + model_name + '/history.txt'
         self.val_path = path+'Results/Validations/'+model_name+'/'
+
         if not os.path.exists(self.val_path):
             os.mkdir(self.val_path)
             os.mkdir(self.val_path+'TD/')
             os.mkdir(self.val_path+'VM/')
-
-        self.writer = open(self.val_path+'validation.txt', 'w')
 
         self.vm_path = path+'/Ventriculomegaly/recon_img/'
         self.vm_images = os.listdir(self.vm_path)
@@ -36,16 +40,17 @@ class Validator:
         self.td_images= os.listdir(self.td_path)
 
     def validation(self,):
-        self.writer.write('Class, Case_ID, Slide_ID, MAE, MSE, SSIM, Anomaly'+'\n')
+        writer = open(self.val_path+'validation.txt', 'w')
+        writer.write('Class, Case_ID, Slide_ID, MAE, MSE, SSIM, Anomaly'+'\n')
         for image in self.vm_images:
             loader = val_loader(self.vm_path+image, self.view, image[:-4], data='vm')
             for id, slice in enumerate(loader):
                 img = slice['image'].to(self.device)
                 if self.ga:
                     ga = slice['ga'].to(self.device)
-                    recon_ref, rec_dic = self.encoder(img, ga)
+                    recon_ref, rec_dic = self.model(img, ga)
                 else:
-                    recon_ref, rec_dic = self.encoder(img)
+                    recon_ref, rec_dic = self.model(img)
 
                 MSE = l2_loss(img, recon_ref).item()
                 MAE = l1_loss(img, recon_ref).item()
@@ -53,7 +58,7 @@ class Validator:
                 saliency, anomap = Anomaly.anomaly(img, recon_ref)
                 anomap = anomap * saliency
                 
-                self.writer.write('vm, '+
+                writer.write('vm, '+
                                   image[:-4]+', '+
                                   str(id+1)+', '+
                                   str(MAE)+', '+
@@ -88,7 +93,7 @@ class Validator:
                 fig = self.plot(images)
                 fig.save(self.val_path+'TD/'+image[:-4]+'.png')
                 
-                self.writer.write('td, '+
+                writer.write('td, '+
                                   image[:-4]+', '+
                                   str(id+1)+', '+
                                   str(MAE)+', '+
@@ -96,9 +101,9 @@ class Validator:
                                   str(SSIM.item())+', '
                                   +str(anomap.item())+'\n')
                 
-        self.writer.close()
+        writer.close()
                 
-    def plot(self,images):
+    def plot(self, images):
         fig, axs = plt.subplots(2,3)
         names = [["input", "recon", "ref_recon"], ["saliency", "mask", "anomaly"]]
         cmap_i = ["gray", "hot"]
@@ -107,8 +112,44 @@ class Validator:
                 if x == 1 and y == 1:
                     cmap_i[1] = "binary"
                 axs[x, y].imshow(images[names[x][y]].detach().cpu().numpy().squeeze(), cmap = cmap_i[x])
+                axs[x, y].title(names[x][y])
                 axs[x, y].axis("off")
         return fig
     
+    def tc(self,):
+        df = pd.read_csv(self.hist_path)
+
     def stat_analysis(self,):
-        a=0
+        df = pd.read_csv(self.val_path+'validation.txt')
+
+        n_df = pd.melt(df, id_vars='Class', value_vars=['MSE', 'MAE', 'Anomaly'],
+                      var_name='Metric', value_name='Value')
+        td_df = df.where(df['Class']=='td').dropna()
+        vm_df = df.where(df['Class']=='vm').dropna()
+
+        if self.view == 'L':
+            view = 'Sagittal'
+        elif  self.view == 'A':
+            view = 'Coronal'
+        else:
+            view = 'Axial'
+
+        sns.set_style("whitegrid", {'axes.grid' : False})   
+        ax = sns.violinplot(data=n_df, x="Metric", y="Value", hue="Class", split=True, inner="quart").set(
+            title=view+' view.'
+        )
+
+        plt.savefig(self.val_path+view+'violin'+'.png')
+        
+        stat_mse, p_mse = stts.mannwhitneyu(td_df['MSE'], vm_df['MSE'])
+        stat_mae, p_mae = stts.mannwhitneyu(td_df['MAE'], vm_df['MAE'])
+        stat_ssim, p_ssim = stts.mannwhitneyu(td_df['SSIM'], vm_df['SSIM'])
+        stat_anom, p_anom = stts.mannwhitneyu(td_df['Anomaly'], vm_df['Anomaly'])
+
+        stats = [[str(stat_mse), str(stat_mae), str(stat_ssim), str(stat_anom)],
+                 [str(p_mse), str(p_mae), str(p_ssim), str(p_anom)]]
+        
+        table = plt.table(rowLabels=['U1','P-Value'], colLabels=['MSE', 'MAE', 'SSIM', 'Anomaly'])
+        plt.title(view+' Mann-Whitney U Test')
+
+        plt.savefig(self.val_path+view+'_mann-whitman.png')

@@ -46,7 +46,7 @@ class Framework(nn.Module):
         
         anom = anom*(saliency-0.25)
 
-        masks = self.anomap.mask_generation(anom, 95)
+        masks = self.anomap.mask_generation(anom, 99)
 
         x_ref = copy.deepcopy(x_im.detach())
         x_ref = (x_ref*(1-masks).float()) + masks

@@ -163,10 +163,10 @@ class Trainer:
                 refineG_loss += sum(losses.values()).cpu().item()
                 refineD_loss += dis_loss.cpu().item()
 
-                mse_loss = loss_lib.l2_loss(res_dic["y_ref"], img)
-                mae_loss = loss_lib.l1_error(res_dic["y_ref"], img)
-                ssim     = 1 - loss_lib.ssim_loss(res_dic["y_ref"], img)
-                anom     = torch.mean(anomap.flatten())
+                mse_loss = loss_lib.l2_loss(res_dic["y_ref"], img).item()
+                mae_loss = loss_lib.l1_loss(res_dic["y_ref"], img).item()
+                ssim     = 1 - loss_lib.ssim_loss(res_dic["y_ref"], img).item()
+                anom     = torch.mean(anomap.flatten()).item()
 
             refineG_loss /= len(self.loader["ts"])
             refineD_loss /= len(self.loader["ts"])
@@ -184,9 +184,7 @@ class Trainer:
         model_path = self.model_path
         self.writer.write(str(epoch+1) + ', ' +
                           str(tr_loss[0]) + ', ' +
-                          str(tr_loss[1]) + ', ' +
                           str(val_loss[0]) + ', ' +
-                          str(val_loss[1]) + ', ' +
                           str(metrics[0]) + ', ' +
                           str(metrics[1]) + ', ' +
                           str(metrics[2]) + ', ' +
