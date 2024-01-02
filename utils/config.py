@@ -161,18 +161,25 @@ def loader(source_path, view, batch_size, h):
     val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
     return train_final, val_final
 
-def val_loader(val_path, view, key, data='healthy'):
+def val_loader(val_path, images, view, data='healthy'):
+    m = int(np.mean(center_slices(view)))
 
-    ids = int(np.mean(center_slices(view)))
-    val_set = img_dataset(val_path, view, key, data=data)
+    val_set = img_dataset(val_path+images[0], view, images[0][:-4], data=data)
+    v = len(val_set)
 
-    val_set = Subset(val_set,ids)
+    for idx, image in enumerate(images):
+        if idx != 0: 
+            v_set = img_dataset(val_path+image, view, image[:-4], data=data)
+            val_set = torch.utils.data.ConcatDataset([val_set, v_set])
+    
+    ids = list(range(m,len(val_set),v))
 
-    loader = DataLoader(val_set, batch_size=1)
+    final_set = Subset(val_set,ids)
+    loader = DataLoader(final_set, batch_size=1)
 
     return loader
 
-def load_model(model_path, base, ga_method, w, h, z_dim, model='default'):
+def load_model(model_path, base, ga_method, w, h, z_dim, model='default', full = False):
 
     if base == 'ga_VAE':
         from models.ga_vae import Encoder, Decoder
@@ -185,26 +192,58 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default'):
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
     cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
 
-    cpe_new = OrderedDict()
-    cpd_new = OrderedDict()
+    if full:
+        import models.aotgan.aotgan as inpainting
+        refineG = inpainting.InpaintGenerator()
+        cp_refG = torch.load(model_path+'refineG_best.pth', map_location=torch.device('cpu'))
 
-    for k, v in cpe['encoder'].items():
-        name = k[7:]
-        cpe_new[name] = v
+        cp_refG_new = OrderedDict()
 
-    for k, v in cpd['decoder'].items():
-        name = k[7:]
-        cpd_new[name] = v
+        for k, v in cp_refG['refineG'].items():
+            name = k
+            cp_refG_new[name] = v
 
-    encoder.load_state_dict(cpe_new)
-    decoder.load_state_dict(cpd_new)
-    return encoder, decoder
+        refineG.load_state_dict(cp_refG_new)
+
+        cpe_new = OrderedDict()
+        cpd_new = OrderedDict()
+
+        for k, v in cpe['encoder'].items():
+            name = k
+            cpe_new[name] = v
+
+        for k, v in cpd['decoder'].items():
+            name = k
+            cpd_new[name] = v
+
+        encoder.load_state_dict(cpe_new)
+        decoder.load_state_dict(cpd_new)
+
+        return encoder, decoder, refineG
+    else:
+        cpe_new = OrderedDict()
+        cpd_new = OrderedDict()
+
+        for k, v in cpe['encoder'].items():
+            name = k[7:]
+            cpe_new[name] = v
+
+        for k, v in cpd['decoder'].items():
+            name = k[7:]
+            cpd_new[name] = v
+
+        encoder.load_state_dict(cpe_new)
+        decoder.load_state_dict(cpd_new)
+        return encoder, decoder
 
 def path_generator(args):
     # Define paths for obtaining dataset and saving models and results.
     source_path = args.path + 'healthy_dataset/'
 
-    date = time.strftime('%Y%m%d', time.localtime(time.time()))
+    if args.task == 'Train':
+        date = time.strftime('%Y%m%d', time.localtime(time.time()))
+    if args.task == 'Validate':
+        date = args.date
         
     folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}".format(
         args.view, args.type, args.loss, args.batch,date)
@@ -236,7 +275,7 @@ def settings_parser():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--task',
-        dest='type',
+        dest='task',
         choices=['Train', 'Validate'],
         required=False,
         default='Train',

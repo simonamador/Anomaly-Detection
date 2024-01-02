@@ -52,7 +52,8 @@ class Anomaly:
     def mask_generation(self, x, th=95):
         masks = []
         for batch in range(x.shape[0]):
-            x_b = self.normalize(x[batch].cpu().detach().numpy(), 99)
+            # x_b = self.normalize(x[batch].cpu().detach().numpy(), 100)
+            x_b = x[batch].cpu().detach().numpy()
             p_th = np.percentile(x_b, th)
 
             m  = x_b

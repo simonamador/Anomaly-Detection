@@ -223,22 +223,22 @@ class Trainer:
             torch.save({
                 'epoch': epoch + 1,
                 'encoder': self.model.encoder.state_dict(),
-            }, model_path + f'/best_encoder.pth')
+            }, model_path + f'/encoder_best.pth')
 
             torch.save({
                 'epoch': epoch + 1,
                 'decoder': self.model.decoder.state_dict(),
-            }, model_path + f'/best_decoder.pth')
+            }, model_path + f'/decoder_best.pth')
 
             torch.save({
                 'epoch': epoch + 1,
                 'refineG': self.model.refineG.state_dict(),
-            }, model_path + f'/best_refineG.pth')
+            }, model_path + f'/refineG_best.pth')
 
             torch.save({
                 'epoch': epoch + 1,
                 'refineD': self.model.refineD.state_dict(),
-            }, model_path + f'/best_refineD.pth')
+            }, model_path + f'/refineD_best.pth')
             print(f'saved best model in epoch: {epoch+1}')
 
     def plot(self, images):

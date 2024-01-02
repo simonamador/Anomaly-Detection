@@ -44,9 +44,9 @@ class Framework(nn.Module):
         x_recon = self.decoder(z)
         saliency, anom = self.anomap.anomaly(x_recon, x_im)
         
-        anom = anom*(saliency-0.25)
+        anom = anom*saliency
 
-        masks = self.anomap.mask_generation(anom, 99)
+        masks = self.anomap.mask_generation(anom, th=99)
 
         x_ref = copy.deepcopy(x_im.detach())
         x_ref = (x_ref*(1-masks).float()) + masks
