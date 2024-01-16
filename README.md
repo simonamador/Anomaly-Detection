@@ -19,3 +19,5 @@ The latent vector produced by the encoder is of size 1x512. The decoder contains
 for 2000 epochs with an Adam optimizer, learning rate of 1 x 10^-4, weight decay of 1 x 10^-5. Several loss functions are being tested, including L2, SSIM, and combinations.
 
 Other models being tested include the beta-VAE, and VAE which includes the gestational age as a factor.
+
+![Architecture](/new_framework.png)
