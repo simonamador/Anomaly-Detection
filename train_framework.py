@@ -5,7 +5,6 @@ from torch.nn import DataParallel
 import torch.optim as optim
 
 import matplotlib.pyplot as plt
-import copy
 
 from models.framework import Framework
 from utils.config import loader, load_model

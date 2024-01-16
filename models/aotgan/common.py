@@ -1,10 +1,6 @@
 # Code from: https://github.com/researchmm/AOT-GAN-for-Inpainting.git
 
-import torch 
 import torch.nn as nn 
-"""
-Code from: https://github.com/researchmm/AOT-GAN-for-Inpainting.git
-"""
 
 class BaseNetwork(nn.Module):
     def __init__(self):
