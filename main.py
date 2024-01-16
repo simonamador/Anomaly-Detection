@@ -20,9 +20,9 @@ if args.task == 'Train':
     trainer = Trainer(source_path, model_path, tensor_path,
                     image_path, device, args.batch, args.z, args.ga_method, args.type, 
                     args.model, args.view, args.n, args.pre, pre_path)
-    trainer.train_inpainting(args.epochs)
+    trainer.train(args.epochs, args.loss)
 elif args.task == 'Validate':
     validator = Validator(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
-                 args.loss, args.batch, args.z, args.date, args.n, device)
+                 args.z, args.name, args.n, device)
     validator.validation()
     validator.stat_analysis()

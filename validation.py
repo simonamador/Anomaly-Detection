@@ -1,3 +1,5 @@
+# Code written by @simonamador
+
 from utils.config import load_model, val_loader
 from utils.loss import ssim_loss, l1_loss, l2_loss
 from models.anomaly import Anomaly
@@ -12,21 +14,20 @@ import os
 import numpy as np
 
 class Validator:
-    def __init__(self, path, model_path, base, model, view, method, 
-                 loss, batch, z_dim, date, n, device):
+    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device):
         if base == 'ga_VAE':
             self.ga = True
-            model_name = view + '_' + model + '_AE_' + loss + '_b' +str(batch) + '_' + date + 'ga_VAE'
+            model_name = name + '_' + view
         else:
             self.ga = False
-            model_name = view + '_' + model + '_AE_' + loss + '_b' +str(batch) + '_' + date
+            model_name = name + '_' + view
 
         self.view = view
         self.device = device
         self.model = Framework(n, z_dim, method, device, model, self.ga)
 
         self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
-                                                            n, n, z_dim, model=model, full = True)
+                                                            n, n, z_dim, model=model, pre = 'full')
        
         self.hist_path = path+'Results' + model_name + '/history.txt'
         self.val_path = path+'Results/Validations/'+model_name+'/'

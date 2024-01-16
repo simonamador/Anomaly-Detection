@@ -1,4 +1,5 @@
-# Code based on https://github.com/ci-ber/PHANES and https://github.com/researchmm/AOT-GAN-for-Inpainting
+# Code adapted based on https://github.com/ci-ber/PHANES and https://github.com/researchmm/AOT-GAN-for-Inpainting
+# Code written by @simonamador
 
 import torch
 from torch.nn import DataParallel
@@ -27,11 +28,19 @@ class Trainer:
         self.tensor_path = tensor_path 
         self.image_path = image_path   
 
-        if pretrained == True:
-            encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model)
-            self.model.encoder = encoder
-            self.model.decoder = decoder
+        if pretrained is not None:
+            if pretrained == 'base':
+                encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
+                self.model.encoder = encoder
+                self.model.decoder = decoder
+            if pretrained == 'refine':
+                refineG, refineD = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
+                self.model.refineG = refineG
+                self.model.refineD = refineD
+        self.pre = pretrained
 
+        self.base_loss = {'L2': loss_lib.l2_loss, 'L1': loss_lib.l1_loss, 'SSIM': loss_lib.ssim_loss, 
+                     'MS_SSIM': loss_lib.ms_ssim_loss}
         self.loss_keys = {'L1': 1, 'Style': 250, 'Perceptual': 0.1}
         self.losses = {'L1':loss_lib.l1_loss,
                 'Style':loss_lib.Style(),
@@ -43,26 +52,21 @@ class Trainer:
 
         self.loader = {"tr": train_dl, "ts": val_dl}
         
-        self.optimizer_e = optim.Adam(self.model.encoder.parameters(), lr=1e-4, weight_decay=1e-5)
-        self.optimizer_d = optim.Adam(self.model.decoder.parameters(), lr=1e-4, weight_decay=1e-5)
+        self.optimizer_base = optim.Adam(self.model.encoder.parameters(), lr=1e-4, weight_decay=1e-5)
         self.optimizer_netG = optim.Adam(self.model.refineG.parameters(), lr=5.0e-5)
         self.optimizer_netD = optim.Adam(self.model.refineD.parameters(), lr=5.0e-5)
 
-    def train_inpainting(self, epochs):
+    def train(self, epochs, b_loss):
 
         current_loader = self.loader["tr"]
         
-        for param in self.model.encoder.parameters():
-            param.requires_grad = False
-        for param in self.model.decoder.parameters():
-            param.requires_grad = False
-        for param in self.model.refineG.parameters():
-            param.requires_grad = True
-        for param in self.model.refineD.parameters():
-            param.requires_grad = True
-        
         self.writer = open(self.tensor_path, 'w')
-        self.writer.write('Epoch, Train_loss, Val_loss, SSIM, MSE, MAE'+'\n')
+        self.writer.write('Epoch, tr_ed, tr_g, tr_d, v_ed, v_g, v_d, SSIM, MSE, MAE, Anomaly'+'\n')
+
+        encoder = DataParallel(self.model.encoder).to(self.device).train()
+        decoder = DataParallel(self.model.decoder).to(self.device).train()
+        refineG = DataParallel(self.model.refineG).to(self.device).train()
+        refineD = DataParallel(self.model.refineD).to(self.device).train()
 
         self.best_loss = 10000
 
@@ -70,10 +74,6 @@ class Trainer:
         for epoch in range(epochs):
             print('-'*15)
             print(f'epoch {epoch+1}/{epochs}')
-
-            encoder = DataParallel(self.model.encoder).to(self.device).train()
-            decoder = DataParallel(self.model.decoder).to(self.device).train()
-            refineG = DataParallel(self.model.refineG).to(self.device).train()
 
             epoch_refineG_loss, epoch_refineD_loss = 0.0, 0.0,
             for data in current_loader:
@@ -86,54 +86,93 @@ class Trainer:
                     z = encoder(img)
 
                 rec = decoder(z)
-                saliency, anomalies = self.model.anomap.anomaly(rec.detach(), img)
-                anomalies = anomalies * saliency
-                masks = self.model.anomap.mask_generation(anomalies)
 
-                x_ref = (img * (1 - masks).float()) + masks
-
-                y_ref = refineG(x_ref, masks)
-                y_ref = torch.clamp(y_ref, 0, 1)
-
-                zero_pad = torch.nn.ZeroPad2d(1)
-                y_ref = zero_pad(y_ref)
-
-                ref_recon = (1-masks)*img + masks*y_ref
-
-                losses = {}
-                for name, weight in self.loss_keys.items():
-                    losses[name] = weight * self.losses[name](y_ref, img)
-
-                dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks)
-
-                # losses['advg'] = gen_loss * self.adv_weight
+                # ------ Update Base Model   ------
                 
-                self.optimizer_netG.zero_grad()
-                self.optimizer_netD.zero_grad()
-                sum(losses.values()).backward()
-                dis_loss.backward()
-                self.optimizer_netG.step()
-                self.optimizer_netD.step()
+                if self.pre != 'base':
+                    for param in self.model.encoder.parameters():
+                        param.requires_grad = True
+                    for param in self.model.decoder.parameters():
+                        param.requires_grad = True
+                    for param in self.model.refineG.parameters():
+                        param.requires_grad = False
+                    for param in self.model.refineD.parameters():
+                        param.requires_grad = False
 
-                epoch_refineG_loss += sum(losses.values()).cpu().item()
-                epoch_refineD_loss += dis_loss.cpu().item()
+                    ed_loss = self.base_loss[b_loss](rec,img)
+                    self.optimizer_base.zero_grad()
+                    ed_loss.backward()
+                    self.optimizer_base.step()
+
+                # ------ Update Refine Model ------
+
+                if self.pre != 'refine':
+
+                    for param in self.model.encoder.parameters():
+                        param.requires_grad = False
+                    for param in self.model.decoder.parameters():
+                        param.requires_grad = False
+                    for param in self.model.refineG.parameters():
+                        param.requires_grad = True
+                    for param in self.model.refineD.parameters():
+                        param.requires_grad = True
+
+                    saliency, anomalies = self.model.anomap.anomaly(rec.detach(), img)
+                    anomalies = anomalies * saliency
+                    masks = self.model.anomap.mask_generation(anomalies)
+
+                    x_ref = (img * (1 - masks).float()) + masks
+
+                    y_ref = refineG(x_ref, masks)
+                    y_ref = torch.clamp(y_ref, 0, 1)
+
+                    zero_pad = torch.nn.ZeroPad2d(1)
+                    y_ref = zero_pad(y_ref)
+
+                    ref_recon = (1-masks)*img + masks*y_ref
+
+                    losses = {}
+                    for name, weight in self.loss_keys.items():
+                        losses[name] = weight * self.losses[name](y_ref, img)
+
+                    dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks)
+
+                    # No se incluye en el entrenamiento de SAPI.
+                    losses['advg'] = gen_loss * self.adv_weight
+                    
+                    self.optimizer_netG.zero_grad()
+                    self.optimizer_netD.zero_grad()
+                    sum(losses.values()).backward()
+                    dis_loss.backward()
+                    self.optimizer_netG.step()
+                    self.optimizer_netD.step()
+
+                    epoch_refineG_loss += sum(losses.values()).cpu().item()
+                    epoch_refineD_loss += dis_loss.cpu().item()
             
             epoch_refineG_loss /= len(self.loader["ts"])
             epoch_refineD_loss /= len(self.loader["ts"])
 
-            test_dic = self.test()
+            test_dic = self.test(b_loss)
             val_loss = test_dic["losses"] 
             metrics = test_dic["metrics"] 
             images = test_dic["images"] 
 
-            self.log(epoch, epochs, [epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics, images)
+            self.log(epoch, epochs, [ed_loss, epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics, images)
 
-            print('train_loss: {:.6f}'.format(epoch_refineG_loss))
-            print('val_loss: {:.6f}'.format(val_loss[0]))
+            if self.pre != 'basic':
+                p_loss = ed_loss
+                p_vloss = val_loss[0]
+            else:
+                p_loss = epoch_refineG_loss
+                p_vloss = val_loss[1]
+
+            print('train_loss: {:.6f}'.format(p_loss))
+            print('val_loss: {:.6f}'.format(p_vloss))
 
         self.writer.close()
 
-    def test(self):
+    def test(self, b_loss):
         self.model.eval()
 
         refineG_loss = 0
@@ -149,6 +188,7 @@ class Trainer:
                 else:
                     ref_recon, res_dic = self.model(img)
 
+                ed_loss = self.base_loss[b_loss](res_dic["x_recon"],img)
                 anomap = abs(ref_recon-img)*self.model.anomap.saliency_map(ref_recon,img)
 
                 losses = {}
@@ -177,13 +217,17 @@ class Trainer:
             images = {"input": img[0][0], "recon": res_dic["x_recon"][0], "saliency": res_dic["saliency"][0],
                       "mask": -res_dic["mask"][0], "ref_recon": ref_recon[0], "anomaly": anomap[0][0]}    
         
-        return {'losses': [refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom], 'images': images}
+        return {'losses': [ed_loss, refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom], 'images': images}
 
     def log(self, epoch, epochs, tr_loss, val_loss, metrics, images):
         model_path = self.model_path
         self.writer.write(str(epoch+1) + ', ' +
-                          str(tr_loss[0]) + ', ' +
-                          str(val_loss[0]) + ', ' +
+                          str(tr_loss[0].item()) + ', ' +
+                          str(tr_loss[1]) + ', ' +
+                          str(tr_loss[2]) + ', ' +
+                          str(val_loss[0].item()) + ', ' +
+                          str(val_loss[1]) + ', ' +
+                          str(val_loss[2]) + ', ' +
                           str(metrics[0]) + ', ' +
                           str(metrics[1]) + ', ' +
                           str(metrics[2]) + ', ' +

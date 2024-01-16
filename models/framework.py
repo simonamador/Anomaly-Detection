@@ -20,11 +20,11 @@ class Framework(nn.Module):
         if ga:
             from models.ga_vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, method)
-            self.decoder = Decoder(n, n, z_dim)
+            self.decoder = Decoder(n, n, int(z_dim/2))
         else:
             from models.vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, model = model)
-            self.decoder = Decoder(n, n, z_dim, model = model)
+            self.decoder = Decoder(n, n, int(z_dim/2), model = model)
 
     def forward(self, x_im, x_ga = None):
         if self.ga:

@@ -179,7 +179,7 @@ def val_loader(val_path, images, view, data='healthy'):
 
     return loader
 
-def load_model(model_path, base, ga_method, w, h, z_dim, model='default', full = False):
+def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = False):
 
     if base == 'ga_VAE':
         from models.ga_vae import Encoder, Decoder
@@ -192,38 +192,19 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', full =
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
     cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
 
-    if full:
-        import models.aotgan.aotgan as inpainting
-        refineG = inpainting.InpaintGenerator()
-        cp_refG = torch.load(model_path+'refineG_best.pth', map_location=torch.device('cpu'))
+    cpe_new = OrderedDict()
+    cpd_new = OrderedDict()
 
-        cp_refG_new = OrderedDict()
+    import models.aotgan.aotgan as inpainting
+    refineG = inpainting.InpaintGenerator()
+    refineD = inpainting.Discriminator()
+    cp_refG = torch.load(model_path+'refineG_best.pth', map_location=torch.device('cpu'))
+    cp_refD = torch.load(model_path+'refineD_best.pth', map_location=torch.device('cpu'))
 
-        for k, v in cp_refG['refineG'].items():
-            name = k
-            cp_refG_new[name] = v
+    cp_refG_new = OrderedDict()
+    cp_refD_new = OrderedDict()
 
-        refineG.load_state_dict(cp_refG_new)
-
-        cpe_new = OrderedDict()
-        cpd_new = OrderedDict()
-
-        for k, v in cpe['encoder'].items():
-            name = k
-            cpe_new[name] = v
-
-        for k, v in cpd['decoder'].items():
-            name = k
-            cpd_new[name] = v
-
-        encoder.load_state_dict(cpe_new)
-        decoder.load_state_dict(cpd_new)
-
-        return encoder, decoder, refineG
-    else:
-        cpe_new = OrderedDict()
-        cpd_new = OrderedDict()
-
+    if pre == 'base':
         for k, v in cpe['encoder'].items():
             name = k[7:]
             cpe_new[name] = v
@@ -235,36 +216,55 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', full =
         encoder.load_state_dict(cpe_new)
         decoder.load_state_dict(cpd_new)
         return encoder, decoder
+    else:
+        for k, v in cp_refG['refineG'].items():
+            name = k
+            cp_refG_new[name] = v
+
+        refineG.load_state_dict(cp_refG_new)
+
+        if pre == 'full':
+            for k, v in cpe['encoder'].items():
+                name = k
+                cpe_new[name] = v
+
+            for k, v in cpd['decoder'].items():
+                name = k
+                cpd_new[name] = v
+
+            encoder.load_state_dict(cpe_new)
+            decoder.load_state_dict(cpd_new)
+
+            return encoder, decoder, refineG
+        elif pre == 'refine':
+            for k, v in cp_refD['refineD'].items():
+                name = k
+                cp_refD_new[name] = v
+
+            refineD.load_state_dict(cp_refD_new)
+            return refineG, refineD
+        else:
+            raise NameError('Pre-trained model did not load properly')
 
 def path_generator(args):
     # Define paths for obtaining dataset and saving models and results.
     source_path = args.path + 'healthy_dataset/'
-
-    if args.task == 'Train':
-        date = time.strftime('%Y%m%d', time.localtime(time.time()))
-    if args.task == 'Validate':
-        date = args.date
         
-    folder_name = "/{0}_{1}_AE_{2}_b{3}_{4}".format(
-        args.view, args.type, args.loss, args.batch,date)
-    folder_pretrained = "/{0}_{1}_AE_{2}_b64_{4}".format(
-        args.view, args.type, args.loss, args.batch,args.date)
+    folder_name = args.name+'_'+args.view
+    folder_pretrained = args.pre_n+'_'+args.view
 
-    if args.model == 'ga_VAE':
-        folder_name += 'ga_VAE'
-        folder_pretrained += 'ga_VAE'
+    tensor_path = args.path + 'Results/' + folder_name + '/history.txt'
+    model_path = args.path + 'Results/' + folder_name + '/Saved_models/'
+    image_path = args.path + 'Results/' + folder_name + '/Progress/'
+    pre_path = args.path + 'Results/' + folder_pretrained + '/Saved_models/'
 
-    tensor_path = args.path + 'Results' + folder_name + '/history.txt'
-    model_path = args.path + 'Results' + folder_name + '/Saved_models/'
-    image_path = args.path + 'Results' + folder_name + '/Progress/'
-    pre_path = args.path + 'Results' + folder_pretrained + '/Saved_models/'
-
-    if not os.path.exists(args.path + 'Results' + folder_name):
-        os.mkdir(args.path + 'Results' + folder_name)
+    if not os.path.exists(args.path + 'Results/' + folder_name):
+        os.mkdir(args.path + 'Results/' + folder_name)
         os.mkdir(model_path)
         os.mkdir(image_path)
 
     if (args.pre) and (not os.path.exists(pre_path)):
+        print(pre_path)
         raise NameError("model_path for pretraining is not correct.")
 
     print('Directories and paths are correctly initialized.')
@@ -331,18 +331,15 @@ def settings_parser():
     parser.add_argument('--epochs',
         dest='epochs',
         type=int,
-        default=50,
-        choices=range(1, 15000),
+        default=2000,
         required=False,
         help='''
         Number of epochs for training.
         ''')    
     parser.add_argument('--loss',
         dest='loss',
-        default='SSIM',
-        choices=['L2', 'L1', 'SSIM', 'MS_SSIM', 
-                 'Mixed1', 'Mixed2', 'Mixed3', 'Mixed4',
-                 'Perceptual'],
+        default='L2',
+        choices=['L2', 'L1', 'SSIM', 'MS_SSIM'],
         required=False,
         help='''
         Loss function for VAE:
@@ -352,7 +349,7 @@ def settings_parser():
     parser.add_argument('--batch',
         dest='batch',
         type=int,
-        default=1,
+        default=32,
         choices=range(1, 512),
         required=False,
         help='''
@@ -366,28 +363,6 @@ def settings_parser():
         help='''
         The value of the beta parameter.
         ''')
-    parser.add_argument('--model_date',
-    dest='date',
-    default='20231211',
-    required=False,
-    help='''
-    Date of model training.
-    ''')
-    parser.add_argument('--anomaly',
-        dest='anomaly',
-        default='healthy',
-        choices = ['healthy', 'vm'],
-        required=False,
-        help='''
-        Extra model name info.
-        ''')
-    parser.add_argument('--extra',
-        dest='extra',
-        default=False,
-        required=False,
-        help='''
-        Extra model name info.
-        ''')
     parser.add_argument('--z_dim',
         dest='z',
         type=int,
@@ -398,12 +373,30 @@ def settings_parser():
         ''')
     parser.add_argument('--pretrained',
         dest='pre',
-        type=bool,
-        default=True,
+        type=str,
+        default=None,
+        choices=['base','refine'],
         required=False,
         help='''
         If VAE model is pre-trained.
         ''')
+    parser.add_argument('--pre_name',
+        dest='pre_n',
+        type=str,
+        default='Sapi',
+        required=False,
+        help='''
+        Name of pre-trained VAE model.
+        '''
+            )
+    parser.add_argument('--name',
+        dest='name',
+        type=str,
+        required=True,
+        help='''
+        Name for new VAE model.
+        '''
+            )
     parser.add_argument('--n',
         dest='n',
         type=int,
