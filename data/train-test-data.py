@@ -9,7 +9,7 @@ import random
 # This dataset is used for the training of an anomaly detection model.
 
 # Path of working directory
-dir_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/healthy_dataset/'
+dir_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/TD_dataset/'
 
 # Obtains the number of MRI .nii images in dataset
 images = os.listdir(dir_path+'Raw')

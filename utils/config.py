@@ -34,16 +34,29 @@ class img_dataset(Dataset):
         return size
     
     def extract_age(self):
-        csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/extract_data.csv'
+        if self.data == 'healthy':
+            csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/TD_data.csv'
+        else:
+            csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/VM_data.csv'
         id = 'Study ID'
-        if self.data == 'vm':
-            csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/ventriculomegaly-data.csv'
-            id = 'subject'
-        with open(csv_path, 'r') as csvfile:
-            csvreader = csv.DictReader(csvfile)
-            for row in csvreader:
-                if row[id] == self.key:
-                    ga = float(row['GA'])
+
+        if not 'X' in self.key:
+            with open(csv_path, 'r') as csvfile:
+                csvreader = csv.DictReader(csvfile)
+                for row in csvreader:
+                    if row[id] == self.key:
+                        ga = float(row['GA'])
+        else:
+            path_key = self.key[-2:]
+            self.key = self.key[:self.key.index('X')]
+
+            with open(csv_path, 'r') as csvfile:
+                csvreader = csv.DictReader(csvfile)
+                for row in csvreader:
+                    if row[id] == self.key:
+                        if row['Path'][-2:] == path_key:
+                            ga = float(row['GA'])
+        
         ga = np.expand_dims(ga, axis = 0)
         ga = torch.tensor(ga).type(torch.float)
         return ga
@@ -162,32 +175,29 @@ def loader(source_path, view, batch_size, h):
     return train_final, val_final
 
 def val_loader(val_path, images, view, data='healthy'):
-    m = int(np.mean(center_slices(view)))
+    ids = center_slices(view)
 
     val_set = img_dataset(val_path+images[0], view, images[0][:-4], data=data)
-    v = len(val_set)
+    val_set = Subset(val_set, ids)
 
     for idx, image in enumerate(images):
         if idx != 0: 
             v_set = img_dataset(val_path+image, view, image[:-4], data=data)
+            v_set = Subset(v_set, ids)
             val_set = torch.utils.data.ConcatDataset([val_set, v_set])
     
-    ids = list(range(m,len(val_set),v))
-
-    final_set = Subset(val_set,ids)
-    loader = DataLoader(final_set, batch_size=1)
+    loader = DataLoader(val_set, batch_size=1)
 
     return loader
 
 def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = False):
-
     if base == 'ga_VAE':
         from models.ga_vae import Encoder, Decoder
-        encoder = Encoder(w,h,z_dim*2, method = ga_method, model = model)
+        encoder = Encoder(w,h,z_dim, method = ga_method, model = model)
     else:
         from models.vae import Encoder, Decoder
-        encoder = Encoder(w,h,z_dim*2, model=model)
-    decoder = Decoder(w,h,z_dim)
+        encoder = Encoder(w,h,z_dim, model=model)
+    decoder = Decoder(w,h,int(z_dim/2))
 
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
     cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
@@ -226,7 +236,10 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
         if pre == 'full':
             for k, v in cpe['encoder'].items():
                 name = k
-                cpe_new[name] = v
+                if k=='linear.weight' or k=='linear.bias':
+                    cpe_new[name] = v[:511]
+                else:
+                    cpe_new[name] = v
 
             for k, v in cpd['decoder'].items():
                 name = k
@@ -248,7 +261,7 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
 
 def path_generator(args):
     # Define paths for obtaining dataset and saving models and results.
-    source_path = args.path + 'healthy_dataset/'
+    source_path = args.path + 'TD_dataset/'
         
     folder_name = args.name+'_'+args.view
     folder_pretrained = args.pre_n+'_'+args.view

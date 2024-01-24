@@ -1,7 +1,6 @@
 # Code from https://github.com/ci-ber/PHANES/
 
 import torch
-import torch.nn as nn
 
 from scipy.ndimage.filters import gaussian_filter
 
