@@ -98,7 +98,8 @@ class Validator:
             # Visualize images
             images = {"input": img[0][0], "recon": rec_dic["x_recon"][0], "saliency": rec_dic["saliency"][0],
                     "mask": -rec_dic["mask"][0], "ref_recon": recon_ref[0], "anomaly": anomap[0]} 
-            fig = self.plot(images)
+            fig = self.plot(images, self.vm_images[int(id/30)][:-4], str(id-30*int(id/30)+1), 
+                                     [MAE, MSE, SSIM.item(), torch.mean(anomap.flatten()).item()])
             fig.savefig(self.val_path+'VM/'+self.vm_images[int(id/30)][:-4]+'_'+str(id-30*int(id/30))+'.png')
             plt.close()
 
@@ -142,7 +143,8 @@ class Validator:
             # Visualize images
             images = {"input": img[0][0], "recon": rec_dic["x_recon"][0], "saliency": rec_dic["saliency"][0],
                     "mask": -rec_dic["mask"][0], "ref_recon": recon_ref[0], "anomaly": anomap[0]} 
-            fig = self.plot(images)
+            fig = self.plot(images, self.td_images[int(id/30)][:-4], str(id-30*int(id/30)+1), 
+                                     [MAE, MSE, SSIM.item(), torch.mean(anomap.flatten()).item()])
             fig.savefig(self.val_path+'TD/'+self.td_images[int(id/30)][:-4]+'_'+str(id-30*int(id/30))+'.png')
             plt.close()
             
@@ -155,7 +157,7 @@ class Validator:
         print('.')
         print('Finished validation.')
                 
-    def plot(self, images):
+    def plot(self, images, subject, sliceid, metrics):
         fig, axs = plt.subplots(2,3)
         names = [["input", "recon", "ref_recon"], ["saliency", "mask", "anomaly"]]
         cmap_i = ["gray", "hot"]
@@ -175,6 +177,8 @@ class Validator:
         axs[1, 2].set_title(names[1][2])
         axs[1, 2].axis("off")
         fig.colorbar(cm.ScalarMappable(norm=None, cmap='hot'), ax = axs[1, 2])
+        label = subject+', Slice '+sliceid+', MAE: '+str(metrics[0])+', MSE: '+str(metrics[1])+', SSIM: '+str(metrics[2])+', Anomaly: '+str(metrics[3])
+        fig.text(0.025, .92, label, fontsize = 6)
         return fig
     
     def tc(self,):

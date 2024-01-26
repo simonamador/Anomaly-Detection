@@ -27,7 +27,7 @@ if args.task == 'Train':
 elif args.task == 'Validate':
     validator = Validator(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
                  args.z, args.name, args.n, device)
-    # validator.validation()
-    # if args.model == 'ga_VAE':
-    #     validator.age_differential()
+    validator.validation()
+    if args.model == 'ga_VAE':
+        validator.age_differential()
     validator.mannwhitneyu()
