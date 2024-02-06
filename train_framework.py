@@ -103,6 +103,8 @@ class Trainer:
             # Runs through loader
             for data in current_loader:
 
+                # ------ Grading Rules for Base Model   ------
+
                 if self.pre is None or self.pre == 'refine':
                     for param in self.model.encoder.parameters():
                         param.requires_grad = True
@@ -129,15 +131,10 @@ class Trainer:
                 
                 if self.pre is None or self.pre == 'refine': 
                     
-
                     ed_loss = self.base_loss[b_loss](rec,img)
-
                     self.optimizer_base.zero_grad()
-
                     ed_loss.backward()
-
                     self.optimizer_base.step()
-
                     epoch_ed_loss += ed_loss
 
                 # ------ Update Refine Model ------
@@ -206,10 +203,10 @@ class Trainer:
             self.log(epoch, epochs, [epoch_ed_loss, epoch_refineG_loss, epoch_refineD_loss] , val_loss, metrics, images)
 
             # Printing current epoch losses acording to the component being trained.
-            if self.pre != 'basic': # Never entering?
+            if self.pre != 'base': 
                 p_loss = ed_loss
                 p_vloss = val_loss[0]
-            else:
+            else: 
                 p_loss = epoch_refineG_loss
                 p_vloss = val_loss[1]
 
@@ -284,7 +281,7 @@ class Trainer:
         # Every epoch log the training and validation losses for base, refinement_generator and refinement_discriminator,
         # as well as the metrics.
         self.writer.write(str(epoch+1) + ', ' +
-                          str(tr_loss[0].item()) + ', ' +
+                          str(tr_loss[0].item()) if type(tr_loss[0]) != float else 'NA' + ', ' +
                           str(tr_loss[1]) + ', ' +
                           str(tr_loss[2]) + ', ' +
                           str(val_loss[0].item()) + ', ' +
