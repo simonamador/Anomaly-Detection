@@ -216,11 +216,11 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
 
     if pre == 'base':
         for k, v in cpe['encoder'].items():
-            name = k[7:]
+            name = k[:]
             cpe_new[name] = v
 
         for k, v in cpd['decoder'].items():
-            name = k[7:]
+            name = k[:]
             cpd_new[name] = v
 
         encoder.load_state_dict(cpe_new)

@@ -1,5 +1,5 @@
 # Code adapted based on https://github.com/ci-ber/PHANES and https://github.com/researchmm/AOT-GAN-for-Inpainting
-# Code written by @simonamador
+# Code written by @simonamador & @GuillermoTafoya
 
 import torch
 from torch.nn import DataParallel
@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 from models.framework import Framework
 from utils.config import loader, load_model
 from utils import loss as loss_lib
-
+from utils.debugging_printers import *
+torch.autograd.set_detect_anomaly(True)
 class Trainer:
     def __init__(self, source_path, model_path, tensor_path,
                  image_path, device, batch, z_dim, method, model, 
@@ -40,15 +41,15 @@ class Trainer:
         self.model = Framework(n, z_dim, method, device, model, self.ga)  
 
         # Load pre-trained parameters
-        if pretrained is not None:
-            if pretrained == 'base':
-                encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
-                self.model.encoder = encoder
-                self.model.decoder = decoder
-            if pretrained == 'refine':
-                refineG, refineD = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
-                self.model.refineG = refineG
-                self.model.refineD = refineD
+        if pretrained == 'base':
+            encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
+            self.model.encoder = encoder
+            self.model.decoder = decoder
+        if pretrained == 'refine':
+            refineG, refineD = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
+            self.model.refineG = refineG
+            self.model.refineD = refineD
+        prGreen('Model successfully instanciated...')
         self.pre = pretrained
 
         # Load losses
@@ -60,16 +61,19 @@ class Trainer:
                 'Perceptual':loss_lib.Perceptual()}
         self.adv_loss = loss_lib.smgan()
         self.adv_weight = 0.01
+        prGreen('Losses successfully loaded...')
 
         # Establish data loaders
         train_dl, val_dl = loader(source_path, view, batch, n)
         self.loader = {"tr": train_dl, "ts": val_dl}
+        prGreen('Data loaders successfully loaded...')
         
         # Optimizers
         self.optimizer_base = optim.Adam([{'params': self.model.encoder.parameters()},
                                {'params': self.model.decoder.parameters()}], lr=1e-4, weight_decay=1e-5)
         self.optimizer_netG = optim.Adam(self.model.refineG.parameters(), lr=5.0e-5)
         self.optimizer_netD = optim.Adam(self.model.refineD.parameters(), lr=5.0e-5)
+        prGreen('Optimizers successfully loaded...')
 
     def train(self, epochs, b_loss):
         
@@ -98,6 +102,17 @@ class Trainer:
 
             # Runs through loader
             for data in current_loader:
+
+                if self.pre is None or self.pre == 'refine':
+                    for param in self.model.encoder.parameters():
+                        param.requires_grad = True
+                    for param in self.model.decoder.parameters():
+                        param.requires_grad = True
+                    for param in self.model.refineG.parameters():
+                        param.requires_grad = False
+                    for param in self.model.refineD.parameters():
+                        param.requires_grad = False
+
                 img = data['image'].to(self.device)     # Extract image
 
                 # Extract GA if required, encode z vector
@@ -112,26 +127,22 @@ class Trainer:
 
                 # ------ Update Base Model   ------
                 
-                if self.pre != 'base':
-                    for param in self.model.encoder.parameters():
-                        param.requires_grad = True
-                    for param in self.model.decoder.parameters():
-                        param.requires_grad = True
-                    for param in self.model.refineG.parameters():
-                        param.requires_grad = False
-                    for param in self.model.refineD.parameters():
-                        param.requires_grad = False
+                if self.pre is None or self.pre == 'refine': 
+                    
 
                     ed_loss = self.base_loss[b_loss](rec,img)
+
                     self.optimizer_base.zero_grad()
+
                     ed_loss.backward()
+
                     self.optimizer_base.step()
 
                     epoch_ed_loss += ed_loss
 
                 # ------ Update Refine Model ------
 
-                if self.pre != 'refine':
+                if self.pre is None or self.pre == 'base': 
 
                     for param in self.model.encoder.parameters():
                         param.requires_grad = False
@@ -192,10 +203,10 @@ class Trainer:
             images = test_dic["images"] 
 
             # Logging
-            self.log(epoch, epochs, [ed_loss, epoch_refineG_loss, epoch_refineD_loss], val_loss, metrics, images)
+            self.log(epoch, epochs, [epoch_ed_loss, epoch_refineG_loss, epoch_refineD_loss] , val_loss, metrics, images)
 
             # Printing current epoch losses acording to the component being trained.
-            if self.pre != 'basic':
+            if self.pre != 'basic': # Never entering?
                 p_loss = ed_loss
                 p_vloss = val_loss[0]
             else:
