@@ -110,10 +110,12 @@ class Encoder(nn.Module):
 
         z_dist = dist.Normal(mu, std)
         z_sample = z_dist.rsample()
-        if self.model != 'bVAE':
-            return z_sample
-        else:
+        
+        if self.model == 'bVAE':
             return z_sample, mu, log_std
+        
+        return z_sample
+            
    
 # Decoder class builds decoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the input z-vector), model (the model type) 

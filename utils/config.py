@@ -421,7 +421,7 @@ def settings_parser():
     parser.add_argument('--path',
         dest = 'path',
         type = str,
-        default = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/',
+        default = './',
         required = False,
         help='''
         Path to the project directory
