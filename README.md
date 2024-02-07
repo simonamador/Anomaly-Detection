@@ -7,7 +7,7 @@ Anomaly-Detection: Unsupervised learning for detecting structural pathologies in
 </h1>
   <p align="center">
     <a href="https://github.com/simonamador">Carlos Simon Amador</a> • 
-    <a href="https://github.com/VictorSungminYou">Sungmin You</a>
+    <a href="https://github.com/VictorSungminYou">Sungmin You</a> •
     <a href="https://github.com/GuillermoTafoya">Guillermo Tafoya</a>
     
 
