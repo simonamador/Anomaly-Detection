@@ -8,6 +8,8 @@ Anomaly-Detection: Unsupervised learning for detecting structural pathologies in
   <p align="center">
     <a href="https://github.com/simonamador">Carlos Simon Amador</a> • 
     <a href="https://github.com/VictorSungminYou">Sungmin You</a>
+    <a href="https://github.com/GuillermoTafoya">Guillermo Tafoya</a>
+    
 
 ## Purpose
 Design a framework to localize structural brain anomalies in fetal MRI images through the use of unsupervised learning models.
