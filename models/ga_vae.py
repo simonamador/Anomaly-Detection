@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.distributions as dist
 from models.vae import Basic
 
-# Author: @simonamador
+# Author: @simonamador & @GuillermoTafoya
 
 # The following code builds an autoencoder model for unsupervised learning applications in MRI anomaly detection.
 
@@ -47,11 +47,17 @@ class Encoder(nn.Module):
         self.flat_n = n_h * n_w * ch * 8
         self.linear = nn.Linear(self.flat_n,z_dim)
 
+    def standardize(self,x):
+        mean_of_TD_GA = 30.2988
+        std_of_TD_GA = 4.0039
+        return (x-mean_of_TD_GA)/std_of_TD_GA
+    
+
     def normalize(self,x):
         return x/40
 
     def forward(self,x,ga):
-        ga = self.normalize(ga)
+        ga = self.standardize(ga)
 
         x = self.step0(x)
         x = self.step1(x)
@@ -60,14 +66,18 @@ class Encoder(nn.Module):
         x = x.view(-1, self.flat_n)
         z_params = self.linear(x)
 
-        if self.method == 'concat':
-            z_params = torch.cat((z_params,ga), 1)
+        #if self.method == 'concat':
+        #    z_params = torch.cat((z_params,ga), 1)
 
         mu, log_std = torch.chunk(z_params, 2, dim=1)
         std = torch.exp(log_std)
         z_dist = dist.Normal(mu, std)
 
         z_sample = z_dist.rsample()
+
+        # ------ Instead of concatenating to the params, perform the operation on the sample ------
+        if self.method == 'concat':
+            z_sample = torch.cat((z_sample,ga), 1)
 
         if self.method == 'multiplication':
             z_sample = z_sample *ga

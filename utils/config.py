@@ -289,7 +289,7 @@ def settings_parser():
     
     parser.add_argument('--task',
         dest='task',
-        choices=['Train', 'Validate'],
+        choices=['Train', 'Validate', 'Visualize'],
         required=False,
         default='Train',
         help='''

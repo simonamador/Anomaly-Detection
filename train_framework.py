@@ -11,7 +11,7 @@ from models.framework import Framework
 from utils.config import loader, load_model
 from utils import loss as loss_lib
 from utils.debugging_printers import *
-torch.autograd.set_detect_anomaly(True)
+
 class Trainer:
     def __init__(self, source_path, model_path, tensor_path,
                  image_path, device, batch, z_dim, method, model, 
