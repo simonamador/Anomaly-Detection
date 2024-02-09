@@ -121,8 +121,11 @@ class Trainer:
                 if self.ga:
                     ga = data['ga'].to(self.device)
                     z = encoder(img, ga)
+                    #prCyan(f'{ga=}')
                 else:
                     z = encoder(img)
+
+
 
                 # Reconstruct image
                 rec = decoder(z)

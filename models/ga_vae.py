@@ -15,8 +15,8 @@ class Encoder(nn.Module):
             h,
             w,
             z_dim,
-            model: str = 'default',
-            method: str = 'concat'
+            method: str = 'concat',
+            model: str = 'default'
         ):
 
         method_type = ['multiplication','concat', 'concat_sample', 'ordinal_encoding']
@@ -31,8 +31,11 @@ class Encoder(nn.Module):
         self.model = model
 
         # Reduce dimension size by 1 to account for the concatenation of GA
-        if method == 'concat' or method == 'concat_sample':
+        if method == 'concat':
             z_dim = z_dim-1
+
+        if method == 'concat_sample':
+            z_dim = z_dim-2
 
         super(Encoder,self).__init__()
 
@@ -57,27 +60,30 @@ class Encoder(nn.Module):
     
     def calculate_ga_index(self,ga):
         # Map GA to the nearest 0.2 increment starting from 20 (assuming a range of 20-40 GA)
-        ga_mapped = round((ga - 20) / 0.2)
+        ga_mapped = torch.round((ga - 20) / 0.2)
         return ga_mapped
     
-    def create_ordinal_vector(self,ga, size=100):
+    def create_ordinal_vector(self,gas, size=100):
         # https://link.springer.com/chapter/10.1007/978-3-030-32251-9_82
-        # Calculate the index for GA
-        ga_index = self.calculate_ga_index(ga)
-        # Ensure the index does not exceed the size of the vector
-        ga_index = min(ga_index, size)
-        # Create the vector with the first 't' elements set to 1, rest are 0
-        vector = torch.zeros(size)
-        vector[:ga_index] = 1
-        return vector
+        
+        device = gas.device
+        batch_size = gas.size(0)
+        ga_indices = self.calculate_ga_index(gas)
+        vectors = torch.zeros(batch_size, size, device=device)
 
-    def forward(self,x,ga):
+        for i in range(batch_size):
+            vectors[i, :ga_indices[i].long()] = 1  
+
+        return vectors
+
+    def forward(self,x,ga): 
         if self.method == 'ordinal_encoding':
             # Create the ordinal encoding vector for GA
-            ordinal_vector = self.create_ordinal_vector(ga)
-            ga = ordinal_vector.view(1, -1)
+            ga = self.create_ordinal_vector(ga)
+            
         else:
             ga = self.standardize(ga)
+            
 
         x = self.step0(x)
         x = self.step1(x)

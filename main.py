@@ -36,5 +36,5 @@ if __name__ == "__main__":
     elif args.task == 'Visualize':
         visualizer = Visualizer(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
                     args.z, args.name, args.n, device)
-        #visualizer.visualize_age_effect()
-        visualizer.save_reconstruction_images()
+        visualizer.visualize_age_effect()
+        #visualizer.save_reconstruction_images()
