@@ -9,7 +9,7 @@ import operator
 import os
 import csv
 import nibabel as nib
-from debugging_printers import *
+from .debugging_printers import *
 
 class img_dataset(Dataset):
     # Begin the initialization of the datasets. Creates dataset iterativey for each subject and
@@ -99,9 +99,14 @@ class img_dataset(Dataset):
         #img[img < threshold] = 0
 
         original_size = np.array(img.shape)
-        padding = (target_size - original_size) / 2
-        padding = np.ceil(padding).astype(int)
-        padded_img = np.pad(img, ((padding[0], padding[0]), (padding[1], padding[1])), 'constant', constant_values=0)
+        padding_needed = np.array(target_size) - original_size
+        padding_needed = np.maximum(padding_needed, 0)
+        padding_before = padding_needed // 2
+        padding_after = padding_needed - padding_before
+
+        # Apply padding
+        padded_img = np.pad(img, ((padding_before[0], padding_after[0]), (padding_before[1], padding_after[1])), 'constant', constant_values=0)
+
 
         brain_mask = padded_img > 0
         brain_com = center_of_mass(brain_mask)
@@ -113,7 +118,18 @@ class img_dataset(Dataset):
 
         #shifted_img[shifted_img < threshold] = 0
 
-        return shifted_img
+        current_size = np.array(shifted_img.shape)
+        crop_needed = current_size - np.array(target_size)
+        crop_before = crop_needed // 2
+        crop_after = crop_needed - crop_before
+        # Ensure cropping indices are non-negative
+        crop_before = np.maximum(crop_before, 0)
+        crop_after = np.maximum(crop_after, 0)
+        # Apply cropping
+        final_img = shifted_img[crop_before[0]:current_size[0]-crop_after[0], crop_before[1]:current_size[1]-crop_after[1]]
+
+        return final_img
+
 
     def normalize_95(self, x):
         p98 = np.percentile(x, 98)
@@ -296,7 +312,7 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
 
 def path_generator(args):
     # Define paths for obtaining dataset and saving models and results.
-    source_path = args.path + 'TD_dataset/'
+    source_path = args.path + args.training_folder
         
     folder_name = args.name+'_'+args.view
     folder_pretrained = args.pre_n+'_'+args.view
@@ -357,7 +373,7 @@ def settings_parser():
         "S" Sagittal view''') 
     parser.add_argument('--ga_method',
         dest='ga_method',
-        choices=['multiplication', 'concat'],
+        choices=['multiplication', 'concat', 'concat_sample', 'ordinal_encoding'],
         default = 'concat',
         required=False,
         help='''
@@ -457,6 +473,14 @@ def settings_parser():
         dest = 'path',
         type = str,
         default = './',
+        required = False,
+        help='''
+        Path to the project directory
+        ''')
+    parser.add_argument('--training_folder',
+        dest = 'training_folder',
+        type = str,
+        default = 'TD_dataset/',
         required = False,
         help='''
         Path to the project directory

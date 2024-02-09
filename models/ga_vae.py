@@ -16,10 +16,10 @@ class Encoder(nn.Module):
             w,
             z_dim,
             model: str = 'default',
-            method: str = 'multiplication'
+            method: str = 'concat'
         ):
 
-        method_type = ['multiplication','concat']
+        method_type = ['multiplication','concat', 'concat_sample', 'ordinal_encoding']
 
         if method not in method_type:
             raise ValueError('Invalid method to include gestational age. Expected one of: %s' % method_type)
@@ -31,7 +31,7 @@ class Encoder(nn.Module):
         self.model = model
 
         # Reduce dimension size by 1 to account for the concatenation of GA
-        if method == 'concat':
+        if method == 'concat' or method == 'concat_sample':
             z_dim = z_dim-1
 
         super(Encoder,self).__init__()
@@ -51,13 +51,33 @@ class Encoder(nn.Module):
         mean_of_TD_GA = 30.2988
         std_of_TD_GA = 4.0039
         return (x-mean_of_TD_GA)/std_of_TD_GA
-    
 
     def normalize(self,x):
         return x/40
+    
+    def calculate_ga_index(self,ga):
+        # Map GA to the nearest 0.2 increment starting from 20 (assuming a range of 20-40 GA)
+        ga_mapped = round((ga - 20) / 0.2)
+        return ga_mapped
+    
+    def create_ordinal_vector(self,ga, size=100):
+        # https://link.springer.com/chapter/10.1007/978-3-030-32251-9_82
+        # Calculate the index for GA
+        ga_index = self.calculate_ga_index(ga)
+        # Ensure the index does not exceed the size of the vector
+        ga_index = min(ga_index, size)
+        # Create the vector with the first 't' elements set to 1, rest are 0
+        vector = torch.zeros(size)
+        vector[:ga_index] = 1
+        return vector
 
     def forward(self,x,ga):
-        ga = self.standardize(ga)
+        if self.method == 'ordinal_encoding':
+            # Create the ordinal encoding vector for GA
+            ordinal_vector = self.create_ordinal_vector(ga)
+            ga = ordinal_vector.view(1, -1)
+        else:
+            ga = self.standardize(ga)
 
         x = self.step0(x)
         x = self.step1(x)
@@ -66,8 +86,9 @@ class Encoder(nn.Module):
         x = x.view(-1, self.flat_n)
         z_params = self.linear(x)
 
-        #if self.method == 'concat':
-        #    z_params = torch.cat((z_params,ga), 1)
+        if self.method == 'concat':
+            z_params = torch.cat((z_params,ga), 1)
+            
 
         mu, log_std = torch.chunk(z_params, 2, dim=1)
         std = torch.exp(log_std)
@@ -76,11 +97,11 @@ class Encoder(nn.Module):
         z_sample = z_dist.rsample()
 
         # ------ Instead of concatenating to the params, perform the operation on the sample ------
-        if self.method == 'concat':
+        if self.method == 'concat_sample' or self.method == 'ordinal_encoding':
             z_sample = torch.cat((z_sample,ga), 1)
 
         if self.method == 'multiplication':
-            z_sample = z_sample *ga
+            z_sample = z_sample * ga
 
         if self.model != 'bVAE':
             return z_sample
