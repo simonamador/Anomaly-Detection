@@ -9,6 +9,7 @@ import operator
 import os
 import csv
 import nibabel as nib
+from debugging_printers import *
 
 class img_dataset(Dataset):
     # Begin the initialization of the datasets. Creates dataset iterativey for each subject and
@@ -39,23 +40,32 @@ class img_dataset(Dataset):
         else:
             csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/VM_data.csv'
         id = 'Study ID'
+        ga = None
 
-        if not 'X' in self.key:
+        
+
+        if 'recon_native' in self.key:
+            self.key = self.key[:self.key.index('recon_native')-1]
+
+        if 'X' in self.key:
+            path_key = self.key[-2:]
+            self.key = self.key[:self.key.index('X')]
+            with open(csv_path, 'r') as csvfile:
+                csvreader = csv.DictReader(csvfile)
+                for row in csvreader:
+                    if row[id] == self.key:
+                        #if row['Path'][-2:] == path_key:
+                        ga = float(row['GA'])
+        else:
             with open(csv_path, 'r') as csvfile:
                 csvreader = csv.DictReader(csvfile)
                 for row in csvreader:
                     if row[id] == self.key:
                         ga = float(row['GA'])
-        else:
-            path_key = self.key[-2:]
-            self.key = self.key[:self.key.index('X')]
-
-            with open(csv_path, 'r') as csvfile:
-                csvreader = csv.DictReader(csvfile)
-                for row in csvreader:
-                    if row[id] == self.key:
-                        if row['Path'][-2:] == path_key:
-                            ga = float(row['GA'])
+        if not ga:
+            prRed(f"GA not found for {self.key}")
+            raise Exception(f"GA not found for {self.key}")  
+            
         
         ga = np.expand_dims(ga, axis = 0)
         ga = torch.tensor(ga).type(torch.float)
@@ -65,6 +75,7 @@ class img_dataset(Dataset):
         y = x.astype(np.uint8)
         y_rot = imutils.rotate(y, angle = alpha)
         return y_rot.astype(np.float64)
+    
     
     def resizing(self, img, n):
         target = (n, n)
@@ -79,6 +90,30 @@ class img_dataset(Dataset):
         result = np.zeros(target)
         result[tuple(slices)] = img
         return result
+    
+    def adjust_image(self, img, target_size):
+        from scipy.ndimage import center_of_mass, shift
+
+        #threshold = np.percentile(img, 90) * 0.025
+
+        #img[img < threshold] = 0
+
+        original_size = np.array(img.shape)
+        padding = (target_size - original_size) / 2
+        padding = np.ceil(padding).astype(int)
+        padded_img = np.pad(img, ((padding[0], padding[0]), (padding[1], padding[1])), 'constant', constant_values=0)
+
+        brain_mask = padded_img > 0
+        brain_com = center_of_mass(brain_mask)
+
+        padded_center = np.array(padded_img.shape) / 2
+        shift_amount = padded_center - np.array(brain_com)
+
+        shifted_img = shift(padded_img, shift=shift_amount)
+
+        #shifted_img[shifted_img < threshold] = 0
+
+        return shifted_img
 
     def normalize_95(self, x):
         p98 = np.percentile(x, 98)
@@ -94,11 +129,11 @@ class img_dataset(Dataset):
         ga = self.extract_age()
 
         if self.view == 'L':
-            n_img = self.resizing(raw[idx,:,:], self.size)    
+            n_img = self.adjust_image(raw[idx,:,:], self.size)    
         elif self.view == 'A':
-            n_img = self.resizing(raw[:,idx,:], self.size)
+            n_img = self.adjust_image(raw[:,idx,:], self.size)
         else:
-            n_img = self.resizing(raw[:,:,idx], self.size)
+            n_img = self.adjust_image(raw[:,:,idx], self.size)
     
         n_img = self.normalize_95(n_img)
 

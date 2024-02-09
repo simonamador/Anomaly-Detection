@@ -37,7 +37,7 @@ class Visualizer:
             self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
                                                                 n, n, z_dim, model=model, pre = 'full')
         
-            # Validation paths
+            # Visualization paths
             self.hist_path = path+'Results' + model_name + '/history.txt'
             self.vis_path = path+'Results/Visualization/'+model_name+'/'
 
