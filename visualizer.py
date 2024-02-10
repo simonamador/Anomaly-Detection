@@ -19,12 +19,11 @@ class Visualizer:
     def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device):
 
             # Determine if model inputs GA
-            if base == 'ga_VAE':
-                self.ga = True
-                model_name = name + '_' + view
-            else:
-                self.ga = False
-                model_name = name + '_' + view
+            self.ga =  base == 'ga_VAE'
+            model_name = name + '_' + view
+            print(f'{self.ga=}')
+            print(f'{z_dim=}')
+            
 
             self.view = view
             self.device = device
@@ -34,6 +33,7 @@ class Visualizer:
             # Generate and load model
             print(model_path)
             self.model = Framework(n, z_dim, method, device, model, self.ga)
+            
             self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
                                                                 n, n, z_dim, model=model, pre = 'full')
         
@@ -62,7 +62,13 @@ class Visualizer:
 
         loader = val_loader(self.td_path, self.td_images, self.view)
 
+        prev = ''
+        reconstructed = 0
+
         for id, slice in enumerate(loader):
+            if self.td_images[int(id/30)][:-4] == prev:
+                continue
+            prev = self.td_images[int(id/30)][:-4]
             prCyan(f'Working with id={id}')
             img = slice['image'].to(self.device)
             if self.ga:
@@ -135,6 +141,9 @@ class Visualizer:
 
                 #if id == 0:  # Break after the first image for demonstration purposes
                 #    break
+                if reconstructed >= 5:  # Remove or modify this condition as needed
+                    break
+                reconstructed += 1
 
     def save_reconstruction_images(self, delta_ga=5):
         model = self.model.to(self.device)
@@ -147,8 +156,7 @@ class Visualizer:
         for id, slice in enumerate(loader):
             if self.td_images[int(id/30)][:-4] == prev:
                 continue
-            prev = self.td_images[int(id/30)][:-4
-                                              ]
+            prev = self.td_images[int(id/30)][:-4]
             img = slice['image'].to(self.device)
             ga = slice['ga'].to(self.device)
             ga_copy = ga.clone().detach().cpu().numpy()

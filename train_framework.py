@@ -125,8 +125,6 @@ class Trainer:
                 else:
                     z = encoder(img)
 
-
-
                 # Reconstruct image
                 rec = decoder(z)
 
@@ -206,15 +204,14 @@ class Trainer:
             self.log(epoch, epochs, [epoch_ed_loss, epoch_refineG_loss, epoch_refineD_loss] , val_loss, metrics, images)
 
             # Printing current epoch losses acording to the component being trained.
-            if self.pre != 'base': 
-                p_loss = ed_loss
-                p_vloss = val_loss[0]
-            else: 
-                p_loss = epoch_refineG_loss
-                p_vloss = val_loss[1]
 
-            print('train_loss: {:.6f}'.format(p_loss))
-            print('val_loss: {:.6f}'.format(p_vloss))
+            print(f'{epoch_ed_loss=:.6f}')
+            print(f'{epoch_refineG_loss=:.6f}')
+
+            print(f'{val_loss[0]=:.6f}')
+            print(f'{val_loss[1]=:.6f}')
+
+
 
         self.writer.close()
 
@@ -284,7 +281,7 @@ class Trainer:
         # Every epoch log the training and validation losses for base, refinement_generator and refinement_discriminator,
         # as well as the metrics.
         self.writer.write(str(epoch+1) + ', ' +
-                          str(tr_loss[0].item()) if type(tr_loss[0]) != float else 'NA' + ', ' +
+                          str(tr_loss[0].item()) + ', ' +
                           str(tr_loss[1]) + ', ' +
                           str(tr_loss[2]) + ', ' +
                           str(val_loss[0].item()) + ', ' +

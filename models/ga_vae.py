@@ -15,11 +15,11 @@ class Encoder(nn.Module):
             h,
             w,
             z_dim,
-            method: str = 'concat',
+            method,
             model: str = 'default'
         ):
 
-        method_type = ['multiplication','concat', 'concat_sample', 'ordinal_encoding']
+        method_type = ['multiplication','concat', 'concat_sample', 'ordinal_encoding', 'one_hot_encoding']
 
         if method not in method_type:
             raise ValueError('Invalid method to include gestational age. Expected one of: %s' % method_type)
@@ -63,6 +63,18 @@ class Encoder(nn.Module):
         ga_mapped = torch.round((ga - 20) / 0.2)
         return ga_mapped
     
+    def create_one_hot_vector(self, gas, size=100):
+
+        device = gas.device
+        batch_size = gas.size(0)
+        ga_indices = self.calculate_ga_index(gas)
+        vectors = torch.zeros(batch_size, size, device=device)
+
+        for i in range(batch_size):
+            vectors[i, ga_indices[i].long()] = 1  
+
+        return vectors
+   
     def create_ordinal_vector(self,gas, size=100):
         # https://link.springer.com/chapter/10.1007/978-3-030-32251-9_82
         
@@ -80,7 +92,8 @@ class Encoder(nn.Module):
         if self.method == 'ordinal_encoding':
             # Create the ordinal encoding vector for GA
             ga = self.create_ordinal_vector(ga)
-            
+        elif self.method == 'one_hot_encoding':
+            ga = self.create_one_hot_vector(ga)
         else:
             ga = self.standardize(ga)
             
@@ -103,16 +116,16 @@ class Encoder(nn.Module):
         z_sample = z_dist.rsample()
 
         # ------ Instead of concatenating to the params, perform the operation on the sample ------
-        if self.method == 'concat_sample' or self.method == 'ordinal_encoding':
+        if self.method in ['concat_sample', 'ordinal_encoding', 'one_hot_encoding']:
             z_sample = torch.cat((z_sample,ga), 1)
 
         if self.method == 'multiplication':
             z_sample = z_sample * ga
 
-        if self.model != 'bVAE':
-            return z_sample
-        else:
+        if self.model == 'bVAE':
             return z_sample, mu, log_std
+        
+        return z_sample
    
 # Decoder class builds decoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the input z-vector), model (the model type) 

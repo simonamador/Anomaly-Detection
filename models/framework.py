@@ -20,7 +20,7 @@ class Framework(nn.Module):
         if ga:
             from models.ga_vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, method)
-            self.decoder = Decoder(n, n, int(z_dim/2) + (100 if method == 'ordinal_encoding' else 0))
+            self.decoder = Decoder(n, n, int(z_dim/2) + (100 if method in ['ordinal_encoding','one_hot_encoding'] else 0))
         else:
             from models.vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, model = model)

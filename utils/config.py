@@ -242,13 +242,14 @@ def val_loader(val_path, images, view, data='healthy'):
     return loader
 
 def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = False):
+    prCyan(f'{ga_method=}')
     if base == 'ga_VAE':
         from models.ga_vae import Encoder, Decoder
-        encoder = Encoder(w,h,z_dim, method = ga_method, model = model)
+        encoder = Encoder(h, w, z_dim, method = ga_method, model = model)
     else:
         from models.vae import Encoder, Decoder
-        encoder = Encoder(w,h,z_dim, model=model)
-    decoder = Decoder(w,h,int(z_dim/2))
+        encoder = Encoder(h, w, z_dim, model=model)
+    decoder = Decoder(h, w, int(z_dim/2) + (100 if ga_method in ['ordinal_encoding', 'one_hot_encoding'] else 0))
 
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
     cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
@@ -287,7 +288,7 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
         if pre == 'full':
             for k, v in cpe['encoder'].items():
                 name = k
-                if k=='linear.weight' or k=='linear.bias':
+                if (k=='linear.weight' or k=='linear.bias') and ga_method not in ['ordinal_encoding', 'one_hot_encoding']:
                     cpe_new[name] = v[:511]
                 else:
                     cpe_new[name] = v
@@ -373,7 +374,7 @@ def settings_parser():
         "S" Sagittal view''') 
     parser.add_argument('--ga_method',
         dest='ga_method',
-        choices=['multiplication', 'concat', 'concat_sample', 'ordinal_encoding'],
+        choices=['multiplication', 'concat', 'concat_sample', 'ordinal_encoding', 'one_hot_encoding'],
         default = 'concat',
         required=False,
         help='''
@@ -414,7 +415,7 @@ def settings_parser():
         dest='batch',
         type=int,
         default=32,
-        choices=range(1, 512),
+        choices=[2**x for x in range(8)],
         required=False,
         help='''
         Number of batch size.
