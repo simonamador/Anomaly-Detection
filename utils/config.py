@@ -15,7 +15,7 @@ class img_dataset(Dataset):
     # Begin the initialization of the datasets. Creates dataset iterativey for each subject and
     # concatenates them together for both training and testing datasets (implements img_dataset class).
     def __init__(self, root_dir, view, key, data = 'healthy', size: int = 158, horizontal_flip: bool = False, 
-                 vertical_flip: bool = False, rotation_angle: int = None):
+                 vertical_flip: bool = False, rotation_angle: int = None, raw = False):
         self.root_dir = root_dir
         self.view = view
         self.horizontal = horizontal_flip
@@ -24,6 +24,8 @@ class img_dataset(Dataset):
         self.size = size
         self.key = key
         self.data = data
+        self.raw = raw
+        #print(f'{raw=}')
 
     def __len__(self):
         if self.view == 'L':
@@ -36,32 +38,43 @@ class img_dataset(Dataset):
     
     def extract_age(self):
         if self.data == 'healthy':
-            csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/TD_data.csv'
+            if not self.raw:
+                csv_path = '/neuro/labs/grantlab/research/MRI_processing/guillermo.tafoya/Anomaly_Detection/main/TD_data.csv'
+            else:
+                csv_path = '/neuro/labs/grantlab/research/MRI_processing/guillermo.tafoya/Anomaly_Detection/main/TD_data_proceed.csv'
         else:
-            csv_path = '/neuro/labs/grantlab/research/MRI_processing/carlos.amador/anomaly_detection/VM_data.csv'
-        id = 'Study ID'
+            if not self.raw:
+                csv_path = '/neuro/labs/grantlab/research/MRI_processing/guillermo.tafoya/Anomaly_Detection/main/VM_data.csv'
+            else:
+                csv_path = '/neuro/labs/grantlab/research/MRI_processing/guillermo.tafoya/Anomaly_Detection/main/VM_data_proceed.csv'
+        id = 'ID'
         ga = None
 
         
 
-        if 'recon_native' in self.key:
-            self.key = self.key[:self.key.index('recon_native')-1]
+        if 'recon' in self.key:
+            self.key = self.key[:self.key.index('recon')-1]
 
-        if 'X' in self.key:
-            path_key = self.key[-2:]
-            self.key = self.key[:self.key.index('X')]
-            with open(csv_path, 'r') as csvfile:
-                csvreader = csv.DictReader(csvfile)
-                for row in csvreader:
-                    if row[id] == self.key:
-                        #if row['Path'][-2:] == path_key:
-                        ga = float(row['GA'])
+        if not self.raw:
+            if 'X' in self.key:
+                self.key = self.key[:self.key.index('X')]
+                with open(csv_path, 'r') as csvfile:
+                    csvreader = csv.DictReader(csvfile)
+                    for row in csvreader:
+                        if row[id] == self.key:
+                            ga = float(row['GA'])
+            else:
+                with open(csv_path, 'r') as csvfile:
+                    csvreader = csv.DictReader(csvfile)
+                    for row in csvreader:
+                        if row[id] == self.key:
+                            ga = float(row['GA'])
         else:
             with open(csv_path, 'r') as csvfile:
-                csvreader = csv.DictReader(csvfile)
-                for row in csvreader:
-                    if row[id] == self.key:
-                        ga = float(row['GA'])
+                    csvreader = csv.DictReader(csvfile)
+                    for row in csvreader:
+                        if row[id] == self.key:
+                            ga = float(row['GA'])
         if not ga:
             prRed(f"GA not found for {self.key}")
             raise Exception(f"GA not found for {self.key}")  
@@ -94,7 +107,7 @@ class img_dataset(Dataset):
     def adjust_image(self, img, target_size):
         from scipy.ndimage import center_of_mass, shift
 
-        #threshold = np.percentile(img, 90) * 0.025
+        #threshold = np.percentile(img, 95) * 0.0125
 
         #img[img < threshold] = 0
 
@@ -145,11 +158,11 @@ class img_dataset(Dataset):
         ga = self.extract_age()
 
         if self.view == 'L':
-            n_img = self.adjust_image(raw[idx,:,:], self.size)    
+            n_img = self.resizing(raw[idx,:,:], self.size)    
         elif self.view == 'A':
-            n_img = self.adjust_image(raw[:,idx,:], self.size)
+            n_img = self.resizing(raw[:,idx,:], self.size)
         else:
-            n_img = self.adjust_image(raw[:,:,idx], self.size)
+            n_img = self.resizing(raw[:,:,idx], self.size)
     
         n_img = self.normalize_95(n_img)
 
@@ -191,24 +204,24 @@ def data_augmentation(base_set, path, view, key, h, ids):
         base_set = torch.utils.data.ConcatDataset([base_set, aug])
     return base_set
 
-def loader(source_path, view, batch_size, h):
+def loader(source_path, view, batch_size, h, raw = False):
     train_id = os.listdir(source_path+'train/')
     test_id = os.listdir(source_path+'test/')
 
     ids = center_slices(view)
 
-    train_set = img_dataset(source_path+'train/'+train_id[0], view, train_id[0][:-4], size = h)
+    train_set = img_dataset(source_path+'train/'+train_id[0], view, train_id[0][:-4], size = h, raw = raw)
     train_set = Subset(train_set,ids)
     # train_set = data_augmentation(train_set, source_path+'train/'+train_id[0], view, 
     #                               train_id[0][:-4], h, ids)
 
-    test_set = img_dataset(source_path+'test/'+test_id[0],view, test_id[0][:-4], size = h)
+    test_set = img_dataset(source_path+'test/'+test_id[0],view, test_id[0][:-4], size = h, raw = raw)
     test_set = Subset(test_set,ids)
 
     for idx,image in enumerate(train_id):
         if idx != 0:
             train_path = source_path + 'train/' + image
-            tr_set = img_dataset(train_path, view, image[:-4], size = h)
+            tr_set = img_dataset(train_path, view, image[:-4], size = h, raw = raw)
             tr_set = Subset(tr_set,ids)
             # tr_set = data_augmentation(tr_set, train_path, view, image[:-4], h, ids)
             train_set = torch.utils.data.ConcatDataset([train_set, tr_set])
@@ -216,7 +229,7 @@ def loader(source_path, view, batch_size, h):
     for idx,image in enumerate(test_id):
         if idx != 0:
             test_path = source_path + 'test/' + image
-            ts_set = img_dataset(test_path,view, image[:-4], size = h)
+            ts_set = img_dataset(test_path,view, image[:-4], size = h, raw = raw)
             ts_set = Subset(ts_set,ids)
             test_set = torch.utils.data.ConcatDataset([test_set, ts_set])
 
@@ -225,15 +238,15 @@ def loader(source_path, view, batch_size, h):
     val_final = DataLoader(test_set, shuffle=True, batch_size=batch_size,num_workers=12)
     return train_final, val_final
 
-def val_loader(val_path, images, view, data='healthy'):
+def val_loader(val_path, images, view, data='healthy', raw=False):
     ids = center_slices(view)
 
-    val_set = img_dataset(val_path+images[0], view, images[0][:-4], data=data)
+    val_set = img_dataset(val_path+images[0], view, images[0][:-4], data=data, raw=raw)
     val_set = Subset(val_set, ids)
 
     for idx, image in enumerate(images):
         if idx != 0: 
-            v_set = img_dataset(val_path+image, view, image[:-4], data=data)
+            v_set = img_dataset(val_path+image, view, image[:-4], data=data, raw=raw)
             v_set = Subset(v_set, ids)
             val_set = torch.utils.data.ConcatDataset([val_set, v_set])
     
@@ -241,15 +254,15 @@ def val_loader(val_path, images, view, data='healthy'):
 
     return loader
 
-def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = False):
+def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = False, ga_n = 100):
     prCyan(f'{ga_method=}')
     if base == 'ga_VAE':
         from models.ga_vae import Encoder, Decoder
-        encoder = Encoder(h, w, z_dim, method = ga_method, model = model)
+        encoder = Encoder(h, w, z_dim, method = ga_method, model = model, ga_n = ga_n)
     else:
         from models.vae import Encoder, Decoder
         encoder = Encoder(h, w, z_dim, model=model)
-    decoder = Decoder(h, w, int(z_dim/2) + (100 if ga_method in ['ordinal_encoding', 'one_hot_encoding'] else 0))
+    decoder = Decoder(h, w, int(z_dim/2) + (ga_n if ga_method in ['ordinal_encoding', 'one_hot_encoding', 'bpoe'] else 0))
 
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
     cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
@@ -288,7 +301,7 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
         if pre == 'full':
             for k, v in cpe['encoder'].items():
                 name = k
-                if (k=='linear.weight' or k=='linear.bias') and ga_method not in ['ordinal_encoding', 'one_hot_encoding']:
+                if (k=='linear.weight' or k=='linear.bias') and ga_method not in ['ordinal_encoding', 'one_hot_encoding', 'bpoe']:
                     cpe_new[name] = v[:511]
                 else:
                     cpe_new[name] = v
@@ -374,7 +387,7 @@ def settings_parser():
         "S" Sagittal view''') 
     parser.add_argument('--ga_method',
         dest='ga_method',
-        choices=['multiplication', 'concat', 'concat_sample', 'ordinal_encoding', 'one_hot_encoding'],
+        choices=['multiplication', 'concat', 'concat_sample', 'ordinal_encoding', 'one_hot_encoding', 'bpoe'],
         default = 'concat',
         required=False,
         help='''
@@ -485,6 +498,25 @@ def settings_parser():
         required = False,
         help='''
         Path to the project directory
+        ''')
+    parser.add_argument(
+        '-ga_n',
+        '--GA_encoding_dimensions', 
+        dest='ga_n',
+        type=int,
+        default=100,
+        required=False,
+        help='''
+        Size of vector for ga representation.
+        ''')
+    parser.add_argument(
+        '-raw',
+        '--raw_data', 
+        dest='raw',
+        action='store_true',
+        required=False,
+        help='''
+        Training or testing on raw data.
         ''')
 
     return parser

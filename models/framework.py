@@ -7,7 +7,7 @@ import torch
 # Code inspired from https://github.com/ci-ber/PHANES/
 
 class Framework(nn.Module):
-    def __init__(self, n, z_dim, method, device, model, ga):
+    def __init__(self, n, z_dim, method, device, model, ga, ga_n):
         super(Framework, self).__init__()
         self.z = z_dim
         self.ga = ga
@@ -19,8 +19,8 @@ class Framework(nn.Module):
 
         if ga:
             from models.ga_vae import Encoder, Decoder
-            self.encoder = Encoder(n, n, z_dim, method)
-            self.decoder = Decoder(n, n, int(z_dim/2) + (100 if method in ['ordinal_encoding','one_hot_encoding'] else 0))
+            self.encoder = Encoder(n, n, z_dim, method, model=model, ga_n=ga_n)
+            self.decoder = Decoder(n, n, int(z_dim/2) + (ga_n if method in ['ordinal_encoding','one_hot_encoding', 'bpoe'] else 0))
         else:
             from models.vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, model = model)
@@ -44,9 +44,9 @@ class Framework(nn.Module):
         x_recon = self.decoder(z)
         saliency, anom = self.anomap.anomaly(x_recon, x_im)
         
-        anom = anom*saliency
+        anom1 = anom*saliency
 
-        masks = self.anomap.mask_generation(anom, th=99)
+        masks = self.anomap.mask_generation(anom1, th=99)
 
         x_ref = copy.deepcopy(x_im.detach())
         x_ref = (x_ref*(1-masks).float()) + masks
@@ -60,4 +60,4 @@ class Framework(nn.Module):
         if self.method == "beta-VAE":
             return y_fin, {"mu": mu, "log_var": log_var, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref}
         else:
-            return y_fin, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref}
+            return y_fin, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref, 'anom1':anom1}

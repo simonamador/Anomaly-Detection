@@ -22,7 +22,6 @@ def visualize(dl,n = 10):
             plot_mri_slice(image_np, title=ga_value)
             num_visualized += 1
 
-
 if __name__ == '__main__':
     from debugging_printers import *
     from config import loader

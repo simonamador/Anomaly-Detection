@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.distributions as dist
 from models.vae import Basic
 
-# Author: @simonamador & @GuillermoTafoya
+# Author: @GuillermoTafoya
 
 # The following code builds an autoencoder model for unsupervised learning applications in MRI anomaly detection.
 
@@ -205,3 +205,7 @@ class Decoder(nn.Module):
         x = self.step4(x)
         recon = self.activation(x)
         return recon
+    
+
+class Transformer(nn.Module):
+    

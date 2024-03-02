@@ -15,7 +15,7 @@ from utils.debugging_printers import *
 class Trainer:
     def __init__(self, source_path, model_path, tensor_path,
                  image_path, device, batch, z_dim, method, model, 
-                 base, view, n, pretrained, pretrained_path):
+                 base, view, n, pretrained, pretrained_path, ga_n, raw):
         
         # Determine if model inputs GA
         if base == 'ga_VAE':
@@ -38,15 +38,15 @@ class Trainer:
         self.image_path = image_path  
 
         # Generate model
-        self.model = Framework(n, z_dim, method, device, model, self.ga)  
+        self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n)  
 
         # Load pre-trained parameters
         if pretrained == 'base':
-            encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
+            encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained, ga_n = ga_n)
             self.model.encoder = encoder
             self.model.decoder = decoder
         if pretrained == 'refine':
-            refineG, refineD = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained)
+            refineG, refineD = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained, ga_n = ga_n)
             self.model.refineG = refineG
             self.model.refineD = refineD
         prGreen('Model successfully instanciated...')
@@ -64,7 +64,7 @@ class Trainer:
         prGreen('Losses successfully loaded...')
 
         # Establish data loaders
-        train_dl, val_dl = loader(source_path, view, batch, n)
+        train_dl, val_dl = loader(source_path, view, batch, n, raw = raw)
         self.loader = {"tr": train_dl, "ts": val_dl}
         prGreen('Data loaders successfully loaded...')
         
@@ -82,6 +82,8 @@ class Trainer:
         
         # Create logger
         self.writer = open(self.tensor_path, 'w')
+        self.writer.close()
+        self.writer = open(self.tensor_path, 'a')
         self.writer.write('Epoch, tr_ed, tr_g, tr_d, v_ed, v_g, v_d, SSIM, MSE, MAE, Anomaly'+'\n')
 
         self.best_loss = 10000 # Initialize best loss (to identify the best-performing model)
@@ -207,9 +209,11 @@ class Trainer:
 
             print(f'{epoch_ed_loss=:.6f}')
             print(f'{epoch_refineG_loss=:.6f}')
+            print(f'{epoch_refineD_loss=:.6f}')
 
-            print(f'{val_loss[0]=:.6f}')
-            print(f'{val_loss[1]=:.6f}')
+            print(f'ed_val_los={val_loss[0]:.6f}')
+            print(f'refineG_val_loss={val_loss[1]:.6f}')
+            print(f'refineD_val_loss={val_loss[2]:.6f}')
 
 
 
@@ -347,13 +351,15 @@ class Trainer:
             print(f'saved best model in epoch: {epoch+1}')
 
     def plot(self, images):
-        fig, axs = plt.subplots(2,3)
+        fig, axs = plt.subplots(2, 3, figsize=(10, 6))
         names = [["input", "recon", "ref_recon"], ["saliency", "anomaly", "mask"]]
         cmap_i = ["gray", "hot"]
         for x in range(2):
             for y in range(3):
                 if x == 1 and y == 2:
                     cmap_i[1] = "binary"
-                axs[x, y].imshow(images[names[x][y]].detach().cpu().numpy().squeeze(), cmap = cmap_i[x])
+                axs[x, y].imshow(images[names[x][y]].detach().cpu().numpy().squeeze(), cmap=cmap_i[x])
+                axs[x, y].set_title(names[x][y])
                 axs[x, y].axis("off")
+        plt.tight_layout()
         return fig
