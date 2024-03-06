@@ -461,7 +461,7 @@ def settings_parser():
     parser.add_argument('--pre_name',
         dest='pre_n',
         type=str,
-        default='Sapi',
+        default='Tlaloc',
         required=False,
         help='''
         Name of pre-trained VAE model.
@@ -517,6 +517,15 @@ def settings_parser():
         required=False,
         help='''
         Training or testing on raw data.
+        ''')
+    parser.add_argument(
+        '-th',
+        '--threshold', 
+        dest='th',
+        type=int,
+        default=99,
+        help='''
+        Treshold for the mask.
         ''')
 
     return parser

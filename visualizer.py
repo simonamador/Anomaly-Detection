@@ -16,7 +16,7 @@ import numpy as np
 from utils.debugging_printers import *
 
 class Visualizer:
-    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw):
+    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw, th = 99):
 
             # Determine if model inputs GA
             self.ga =  base == 'ga_VAE'
@@ -33,7 +33,7 @@ class Visualizer:
 
             # Generate and load model
             print(model_path)
-            self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n)
+            self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n, th = th)
             
             self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
                                                                 n, n, z_dim, model=model, pre = 'full', ga_n=ga_n)
@@ -147,6 +147,46 @@ class Visualizer:
                 if reconstructed >= 15:  # Remove or modify this condition as needed
                     break
                 reconstructed += 1
+
+
+    def find_nonzero_bounding_box(slice_2d, percentile=98, file_name='slice_with_bbox.png'):
+        import matplotlib.patches as patches
+        def rotate(image):
+            return np.rot90(image, 1)
+    
+        slice_2d = rotate(slice_2d)
+
+        # Determine the threshold based on the specified percentile of the non-zero values
+        threshold = np.percentile(slice_2d[slice_2d > 0], percentile)
+        
+        # Apply the threshold to create a binary array: True for values above the threshold, False otherwise
+        binary_slice = slice_2d > threshold
+
+        # Find the indices of the True elements
+        rows, cols = np.nonzero(binary_slice)
+        if len(rows) == 0 or len(cols) == 0:  # If the slice is effectively empty after thresholding
+            return 0, 0  # No bounding box
+
+        # Calculate the bounding box dimensions
+        min_col, max_col = cols.min(), cols.max()
+        min_row, max_row = rows.min(), rows.max()
+        width = max_col - min_col + 1
+        height = max_row - min_row + 1
+
+        # Plotting
+        fig, ax = plt.subplots()
+        ax.imshow(slice_2d, cmap='gray')
+        # Add a rectangle patch for the bounding box
+        rect = patches.Rectangle((min_col, min_row), width, height, linewidth=1, edgecolor='r', facecolor='none')
+        ax.add_patch(rect)
+        voxel_size = 0.859375
+        plt.title(f'Bounding Box: {width*voxel_size}x{height*voxel_size} mm (width x height)')  # Display the size of the bounding box
+        plt.savefig(file_name)  # Save the figure
+        plt.close(fig)  # Close the figure to free up memory
+
+        return width, height
+    
+    # find_nonzero_bounding_box_3(normalized_slice, percentile=80, file_name=f'{case}_central_{view}_normalized_slice_with_bbox.png')
 
     def save_reconstruction_images(self, delta_ga=10):
         model = self.model.to(self.device)

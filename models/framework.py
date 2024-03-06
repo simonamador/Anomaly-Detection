@@ -7,11 +7,12 @@ import torch
 # Code inspired from https://github.com/ci-ber/PHANES/
 
 class Framework(nn.Module):
-    def __init__(self, n, z_dim, method, device, model, ga, ga_n):
+    def __init__(self, n, z_dim, method, device, model, ga, ga_n, th=99):
         super(Framework, self).__init__()
         self.z = z_dim
         self.ga = ga
         self.method = method
+        self.th = th
 
         self.anomap = Anomaly(device)
         self.refineG = inpainting.InpaintGenerator().to(device)
@@ -46,7 +47,7 @@ class Framework(nn.Module):
         
         anom1 = anom*saliency
 
-        masks = self.anomap.mask_generation(anom1, th=99)
+        masks = self.anomap.mask_generation(anom1, th=self.th)
 
         x_ref = copy.deepcopy(x_im.detach())
         x_ref = (x_ref*(1-masks).float()) + masks

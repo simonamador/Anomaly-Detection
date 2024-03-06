@@ -15,7 +15,7 @@ import os
 import numpy as np
 
 class Validator:
-    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw):
+    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw, th = 99):
 
         # Determine if model inputs GA
         if base == 'ga_VAE':
@@ -31,7 +31,7 @@ class Validator:
 
         # Generate and load model
         print(model_path)
-        self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n=ga_n)
+        self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n=ga_n, th = th)
         self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
                                                             n, n, z_dim, model=model, pre = 'full', ga_n=ga_n)
        

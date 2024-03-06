@@ -15,7 +15,7 @@ from utils.debugging_printers import *
 class Trainer:
     def __init__(self, source_path, model_path, tensor_path,
                  image_path, device, batch, z_dim, method, model, 
-                 base, view, n, pretrained, pretrained_path, ga_n, raw):
+                 base, view, n, pretrained, pretrained_path, ga_n, raw, th = 99):
         
         # Determine if model inputs GA
         if base == 'ga_VAE':
@@ -36,9 +36,10 @@ class Trainer:
         self.model_path = model_path  
         self.tensor_path = tensor_path 
         self.image_path = image_path  
+        self.th = th
 
         # Generate model
-        self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n)  
+        self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n, th=self.th)
 
         # Load pre-trained parameters
         if pretrained == 'base':
@@ -203,7 +204,7 @@ class Trainer:
             images = test_dic["images"] 
 
             # Logging
-            self.log(epoch, epochs, [epoch_ed_loss, epoch_refineG_loss, epoch_refineD_loss] , val_loss, metrics, images)
+            self.log(epoch, epochs, [epoch_ed_loss, epoch_refineG_loss, epoch_refineD_loss] , val_loss, metrics, images, pretrained = self.pre)
 
             # Printing current epoch losses acording to the component being trained.
 
@@ -279,16 +280,18 @@ class Trainer:
         
         return {'losses': [ed_loss, refineG_loss, refineD_loss],'metrics': [mse_loss, mae_loss, ssim, anom], 'images': images}
 
-    def log(self, epoch, epochs, tr_loss, val_loss, metrics, images):
+    def log(self, epoch, epochs, tr_loss, val_loss, metrics, images, pretrained):
         model_path = self.model_path
         
         # Every epoch log the training and validation losses for base, refinement_generator and refinement_discriminator,
         # as well as the metrics.
         self.writer.write(str(epoch+1) + ', ' +
-                          str(tr_loss[0].item()) + ', ' +
+                          str(tr_loss[0].item() if pretrained != 'base' else '0'
+                              ) + ', ' +
                           str(tr_loss[1]) + ', ' +
                           str(tr_loss[2]) + ', ' +
-                          str(val_loss[0].item()) + ', ' +
+                          str(val_loss[0].item() if pretrained != 'base' else '0'
+                              ) + ', ' +
                           str(val_loss[1]) + ', ' +
                           str(val_loss[2]) + ', ' +
                           str(metrics[0]) + ', ' +
