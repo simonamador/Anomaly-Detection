@@ -1,4 +1,5 @@
 # Code from https://github.com/researchmm/AOT-GAN-for-Inpainting.git
+# cGAN adapted-ish
 
 import torch
 import torch.nn as nn
@@ -6,6 +7,41 @@ import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
 
 from models.aotgan.common import BaseNetwork
+
+size = 0
+
+def calculate_ga_index(ga):
+        # Map GA to the nearest increment starting from 20 (assuming a range of 20-40 GA)
+        increment = (40-20)/size
+        ga_mapped = torch.round((ga - 20) / increment)
+        return ga_mapped
+
+def create_bi_partitioned_ordinal_vector(gas):
+        # Adjusting the threshold for the nearest 0.1 increment
+        threshold_index = size//2
+        device = gas.device
+        batch_size = gas.size(0)
+        ga_indices = calculate_ga_index(gas)
+        vectors = torch.full((batch_size, size), -1, device=device)  # Default fill with -1
+
+        for i in range(batch_size):
+            idx = ga_indices[i].long()
+            if idx > size:
+                idx = size
+            elif idx < 0:
+                idx = 1
+            
+
+            if idx >= threshold_index:  # GA >= 30
+                new_idx = (idx-threshold_index)*2
+                vectors[i, :new_idx] = 1  # First 100 elements to 1 (up to GA == 30)
+                vectors[i, new_idx:] = 0  # The rest to 0
+            else:  # GA < 30
+                new_idx = idx*2
+                vectors[i, :new_idx] = 0  # First 100 elements to 0
+                # The rest are already set to -1
+
+        return vectors
 
 
 class InpaintGenerator(BaseNetwork):
@@ -24,10 +60,10 @@ class InpaintGenerator(BaseNetwork):
             nn.ReLU(True)
         )
 
-        self.middle = nn.Sequential(*[AOTBlock(256, rates) for _ in range(block_num)])
+        self.middle = nn.Sequential(*[AOTBlock(256+size, rates) for _ in range(block_num)])
 
         self.decoder = nn.Sequential(
-            UpConv(256, 128),
+            UpConv(256+size, 128),
             nn.ReLU(True),
             UpConv(128, 64),
             nn.ReLU(True),
@@ -36,15 +72,33 @@ class InpaintGenerator(BaseNetwork):
 
         self.init_weights()
 
-    def forward(self, x, mask):
-        x = torch.cat([x, mask], dim=1)
-        # print(x.shape)
+    # ======== PREVIOUS VERSION ========
+    # def forward(self, x, mask, ga=None):
+    #     x = torch.cat([x, mask], dim=1)
+    #     # print(x.shape)
+    #     x = self.encoder(x)
+    #     # print(x.shape)
+    #     x = self.middle(x) # Add BOE here TODO
+    #     # print(x.shape)
+    #     x = self.decoder(x)
+    #     # print(x.shape)
+    #     x = torch.tanh(x)
+    #     return x
+
+    def forward(self, x, mask, ga=None):
+        x = torch.cat([x, mask], dim=1)  # Combine image and mask
         x = self.encoder(x)
-        # print(x.shape)
+
+        if ga is not None:
+            # Encode GA using your method
+            encoded_ga = create_bi_partitioned_ordinal_vector(ga)
+            # You may need to expand the dimensions to match x
+            encoded_ga_expanded = encoded_ga.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, x.size(2), x.size(3))
+            # Concatenate encoded GA with the feature map
+            x = torch.cat([x, encoded_ga_expanded], dim=1)
+
         x = self.middle(x)
-        # print(x.shape)
         x = self.decoder(x)
-        # print(x.shape)
         x = torch.tanh(x)
         return x
 
@@ -115,6 +169,18 @@ class Discriminator(BaseNetwork):
 
         self.init_weights()
 
-    def forward(self, x):
+    # ======== PREVIOUS VERSION ========
+    # def forward(self, x):
+    #     feat = self.conv(x)
+    #     return feat
+
+    def forward(self, x, ga=None):
+        if ga is not None:
+            # Encode GA using the same function as in the generator
+            encoded_ga = create_bi_partitioned_ordinal_vector(ga)
+            # Expand GA to match feature dimensions and concatenate
+            encoded_ga_expanded = encoded_ga.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, x.size(2), x.size(3))
+            x = torch.cat([x, encoded_ga_expanded], dim=1)
+
         feat = self.conv(x)
         return feat

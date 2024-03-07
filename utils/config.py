@@ -527,5 +527,23 @@ def settings_parser():
         help='''
         Treshold for the mask.
         ''')
+    parser.add_argument(
+        '-cGAN',
+        '--conditional_GAN', 
+        dest='cGAN',
+        action='store_true',
+        required=False,
+        help='''
+        BOE implemented to the GD as a cGAN.
+        ''')
+    parser.add_argument(
+        '-cGAN_s',
+        '--conditional_GAN', 
+        dest='cGAN',
+        action='store_true',
+        required=False,
+        help='''
+        BOE implemented to the GD as a cGAN.
+        ''')
 
     return parser

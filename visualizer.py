@@ -327,12 +327,13 @@ class Visualizer:
                 os.makedirs(folder_path, exist_ok=True)
                 comparison_filename = f'{str(id - 30 * int(id / 30))}_{str(ga_val)}.png'
                 fig.savefig(os.path.join(folder_path, comparison_filename))
+            
                 plt.close(fig)  # Close the figure to free memory
 
                 # Optional: Print out a status message
                 print(f'Saved multi-image comparison for GA value {ga_val:.2f}')
 
-
+            print(f'Processed {folder_path}')
             if reconstructed >= 14:  
                 break
             reconstructed += 1

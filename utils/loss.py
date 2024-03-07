@@ -72,12 +72,12 @@ class smgan():
     def __init__(self): 
         self.loss_fn = nn.MSELoss()
     
-    def __call__(self, netD, fake, real, masks): 
+    def __call__(self, netD, fake, real, masks, ga = None): 
         fake_detach = fake.detach()
 
-        g_fake = netD(fake)
-        d_fake  = netD(fake_detach)
-        d_real = netD(real)
+        g_fake = netD(fake, ga)
+        d_fake  = netD(fake_detach, ga)
+        d_real = netD(real, ga)
 
         _, _, h, w = g_fake.size()
         b, c, ht, wt = masks.size()

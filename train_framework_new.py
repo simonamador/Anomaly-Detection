@@ -1,5 +1,5 @@
 # Code adapted based on https://github.com/ci-ber/PHANES and https://github.com/researchmm/AOT-GAN-for-Inpainting
-# Code written by @simonamador & @GuillermoTafoya
+# Code written by  @GuillermoTafoya & @simonamador
 
 import torch
 from torch.nn import DataParallel
@@ -15,7 +15,7 @@ from utils.debugging_printers import *
 class Trainer:
     def __init__(self, source_path, model_path, tensor_path,
                  image_path, device, batch, z_dim, method, model, 
-                 base, view, n, pretrained, pretrained_path, ga_n, raw, th = 99, cGAN = False):
+                 base, view, n, pretrained, pretrained_path, ga_n, raw, th = 99):
         
         # Determine if model inputs GA
         if base == 'ga_VAE':
@@ -64,7 +64,7 @@ class Trainer:
         self.adv_weight = 0.01
 
         ### VAE ADVERSARIAL LOSS ### TODO
-
+        
         prGreen('Losses successfully loaded...')
 
         # Establish data loaders
@@ -73,10 +73,47 @@ class Trainer:
         prGreen('Data loaders successfully loaded...')
         
         # Optimizers
-        self.optimizer_base = optim.Adam([{'params': self.model.encoder.parameters()},
-                               {'params': self.model.decoder.parameters()}], lr=1e-4, weight_decay=1e-5)
+        
+        # self.optimizer_base = optim.Adam([{'params': self.model.encoder.parameters()},
+        #                       {'params': self.model.decoder.parameters()}], lr=1e-4, weight_decay=1e-5)
+        self.optimizer_e = optim.Adam(self.model.encoder.parameters(), lr=1e-4, weight_decay=1e-5)
+        self.optimizer_d = optim.Adam(self.model.decoder.parameters(), lr=1e-4, weight_decay=1e-5)
         self.optimizer_netG = optim.Adam(self.model.refineG.parameters(), lr=5.0e-5)
         self.optimizer_netD = optim.Adam(self.model.refineD.parameters(), lr=5.0e-5)
+
+        # TODO
+        # self.e_scheduler = MultiStepLR(self.optimizer_e, milestones=(100,), gamma=0.1)
+        # self.d_scheduler = MultiStepLR(self.optimizer_d, milestones=(100,), gamma=0.1)
+        # self.netG_scheduler = MultiStepLR(self.optimizer_netG, milestones=(100,), gamma=0.1)
+        # self.netD_scheduler = MultiStepLR(self.optimizer_netD, milestones=(100,), gamma=0.1)
+
+        # TODO
+        # self.scale = 1 / (training_params['input_size'][1] ** 2)  # normalize by images size (channels * height * width)
+        # self.gamma_r = 1e-8
+        # self.beta_kl = training_params['beta_kl'] if 'beta_kl' in training_params.keys() else 1.0
+        # self.beta_rec = training_params['beta_rec'] if 'beta_rec' in training_params.keys() else 0.5
+        # self.beta_neg = training_params['beta_neg'] if 'beta_neg' in training_params.keys() else 128.0
+        # self.z_dim = training_params['z_dim'] if 'z_dim' in training_params.keys() else 128
+        # self.masking_threshold_train = training_params['masking_threshold_train'] if 'masking_threshold_train' in \
+        #                                                                   training_params.keys() else None
+        # self.masking_threshold_inference = training_params['masking_threshold_infer'] if 'masking_threshold_infer' in \
+        #                                                                   training_params.keys() else None
+        # rec_loss = '1*L1+250*Style+0.1*Perceptual'
+        # self.adv_weight = training_params['adv_weight'] if 'adv_weight' in training_params.keys() else 0.01
+        # gan_type = 'smgan'
+        # losses = list(rec_loss.split('+'))
+        # self.rec_loss = {}
+        # for l in losses:
+        #     weight, name = l.split('*')
+        #     self.rec_loss[name] = float(weight)
+        # # set up losses and metrics
+        # self.rec_loss_func = {
+        #     key: getattr(loss_module, key)() for key, val in self.rec_loss.items()}
+        # self.adv_loss = getattr(loss_module, gan_type)()
+
+        # self.embedding_loss = EmbeddingLoss()
+        # super(PTrainer, self).__init__(training_params, model, data, device, log_wandb)
+
         prGreen('Optimizers successfully loaded...')
 
     def train(self, epochs, b_loss):
@@ -106,6 +143,13 @@ class Trainer:
 
             epoch_ed_loss, epoch_refineG_loss, epoch_refineD_loss = 0.0, 0.0, 0.0
 
+            # TODO
+            # start_time = time()
+
+            # diff_kls, batch_kls_real, batch_kls_fake, batch_kls_rec, batch_rec_errs, batch_exp_elbo_f,\
+            # batch_exp_elbo_r, batch_emb, count_images = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0
+            # batch_netGD_rec, batch_netG_loss, batch_netD_loss = 0.0, 0.0, 0.0
+
             # Runs through loader
             for data in current_loader:
 
@@ -121,7 +165,23 @@ class Trainer:
                     for param in self.model.refineD.parameters():
                         param.requires_grad = False
 
+                # TODO update ED independently as a AVAE
+                # =========== Update E ================
+                # if self.pre is None or self.pre == 'refine':
+                    # for param in self.model.encoder.parameters():
+                    #     param.requires_grad = True
+                    # for param in self.model.decoder.parameters():
+                    #     param.requires_grad = False
+                    # for param in self.model.netG.parameters():
+                    #     param.requires_grad = False
+                    # for param in self.model.netD.parameters():
+                    #     param.requires_grad = False
+
                 img = data['image'].to(self.device)     # Extract image
+
+                # TODO
+                # noise_batch = torch.randn(size=(b, self.z_dim)).to(self.device)
+                # real_batch = images.to(self.device)
 
                 # Extract GA if required, encode z vector
                 if self.ga:
@@ -131,8 +191,49 @@ class Trainer:
                 else:
                     z = encoder(img)
 
+                # TODO
+                #  fake = self.model.sample(noise_batch)
+                #  fake = sample(noise_batch)
+
                 # Reconstruct image
                 rec = decoder(z)
+
+
+                # if self.pre is None or self.pre == 'refine': 
+
+                # _, _, healthy_embeddings = self.model.encode(rec.detach())
+
+                # loss_emb = self.embedding_loss(anomaly_embeddings['embeddings'], healthy_embeddings['embeddings'])
+
+                # loss_rec = calc_reconstruction_loss(real_batch, rec, loss_type="mse", reduction="mean")
+                # lossE_real_kl = calc_kl(real_logvar, real_mu, reduce="mean")
+                # rec_rec, z_dict = self.model.ae(rec.detach(), deterministic=False)
+                # rec_mu, rec_logvar, z_rec = z_dict['z_mu'], z_dict['z_logvar'], z_dict['z']
+                # rec_fake, z_dict_fake = self.model.ae(fake.detach(), deterministic=False)
+                # fake_mu, fake_logvar, z_fake = z_dict_fake['z_mu'], z_dict_fake['z_logvar'], z_dict_fake['z']
+
+                # kl_rec = calc_kl(rec_logvar, rec_mu, reduce="none")
+                # kl_fake = calc_kl(fake_logvar, fake_mu, reduce="none")
+
+                # loss_rec_rec_e = calc_reconstruction_loss(rec, rec_rec, loss_type="mse", reduction='none')
+
+                # while len(loss_rec_rec_e.shape) > 1:
+                #     loss_rec_rec_e = loss_rec_rec_e.sum(-1)
+                # loss_rec_fake_e = calc_reconstruction_loss(fake, rec_fake, loss_type="mse", reduction='none')
+                # while len(loss_rec_fake_e.shape) > 1:
+                #     loss_rec_fake_e = loss_rec_fake_e.sum(-1)
+
+                # expelbo_rec = (-2 * self.scale * (self.beta_rec * loss_rec_rec_e + self.beta_neg * kl_rec)).exp().mean()
+                # expelbo_fake = (-2 * self.scale * (self.beta_rec * loss_rec_fake_e + self.beta_neg * kl_fake)).exp().mean()
+
+                # lossE_fake = 0.25 * (expelbo_rec + expelbo_fake)
+                # lossE_real = self.scale * (self.beta_rec * loss_rec + self.beta_kl * lossE_real_kl)
+
+                # if self.pre is None or self.pre == 'refine': 
+                    # lossE = lossE_real + lossE_fake + 0.005 * loss_emb
+                    # self.optimizer_e.zero_grad()
+                    # lossE.backward()
+                    # self.optimizer_e.step()
 
                 # ------ Update Base Model   ------
                 
@@ -144,7 +245,61 @@ class Trainer:
                     self.optimizer_base.step()
                     epoch_ed_loss += ed_loss
 
-                    ### ADVERSARIAL LOSS ### TODO
+                # TODO ========= Update D ==================
+                # for param in self.model.encoder.parameters():
+                #     param.requires_grad = False
+                # for param in self.model.decoder.parameters():
+                #     param.requires_grad = True
+                # for param in self.model.netG.parameters():
+                #     param.requires_grad = False
+                # for param in self.model.netD.parameters():
+                #     param.requires_grad = False
+
+                # fake = self.model.sample(noise_batch)
+                # rec = self.model.decoder(z.detach())
+                # loss_rec = calc_reconstruction_loss(real_batch, rec, loss_type="mse", reduction="mean")
+
+                # rec_mu, rec_logvar,_ = self.model.encode(rec)
+                # z_rec = reparameterize(rec_mu, rec_logvar)
+
+                # fake_mu, fake_logvar,_ = self.model.encode(fake)
+                # z_fake = reparameterize(fake_mu, fake_logvar)
+
+                # rec_rec = self.model.decode(z_rec.detach())
+                # rec_fake = self.model.decode(z_fake.detach())
+
+                # loss_rec_rec = calc_reconstruction_loss(rec.detach(), rec_rec, loss_type="mse", reduction="mean")
+                # loss_fake_rec = calc_reconstruction_loss(fake.detach(), rec_fake, loss_type="mse", reduction="mean")
+
+                # lossD_rec_kl = calc_kl(rec_logvar, rec_mu, reduce="mean")
+                # lossD_fake_kl = calc_kl(fake_logvar, fake_mu, reduce="mean")
+
+
+                # lossD = self.scale * (loss_rec * self.beta_rec + (
+                #         lossD_rec_kl + lossD_fake_kl) * 0.5 * self.beta_kl + self.gamma_r * 0.5 * self.beta_rec * (
+                #                             loss_rec_rec + loss_fake_rec))
+
+                # if self.pre is None or self.pre == 'refine': 
+                    # self.optimizer_d.zero_grad()
+                    # lossD.backward()
+                    # self.optimizer_d.step()
+                    # if torch.isnan(lossD) or torch.isnan(lossE):
+                    #     print('is non for D')
+                    #     raise SystemError
+                    # if torch.isnan(lossE):
+                    #     print('is non for E')
+                    #     raise SystemError
+
+                # diff_kls += -lossE_real_kl.data.cpu().item() + lossD_fake_kl.data.cpu().item() * images.shape[0]
+                # batch_kls_real += lossE_real_kl.data.cpu().item() * images.shape[0]
+                # batch_kls_fake += lossD_fake_kl.cpu().item() * images.shape[0]
+                # batch_kls_rec += lossD_rec_kl.data.cpu().item() * images.shape[0]
+                # batch_rec_errs += loss_rec.data.cpu().item() * images.shape[0]
+
+                # batch_exp_elbo_f += expelbo_fake.data.cpu() * images.shape[0]
+                # batch_exp_elbo_r += expelbo_rec.data.cpu() * images.shape[0]
+
+                # batch_emb += loss_emb.cpu().item() * images.shape[0]
 
                 # ------ Update Refine Model ------
 
@@ -171,6 +326,7 @@ class Trainer:
                         y_ref = refineG(x_ref, masks, ga) 
                     else:
                         y_ref = refineG(x_ref, masks)
+                    
                     y_ref = torch.clamp(y_ref, 0, 1)
 
                     zero_pad = torch.nn.ZeroPad2d(1)
@@ -185,7 +341,10 @@ class Trainer:
                     for name, weight in self.loss_keys.items():
                         losses[name] = weight * self.losses[name](y_ref, img)
 
-                    dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks)
+                    if self.ga:
+                        dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks, ga)
+                    else:
+                        dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks)
 
                     # No se incluye en el entrenamiento de SAPI.
                     losses['advg'] = gen_loss * self.adv_weight
@@ -259,7 +418,10 @@ class Trainer:
                 for name, weight in self.loss_keys.items():
                     losses[name] = weight * self.losses[name](res_dic["y_ref"], img)
 
-                dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, res_dic["mask"])
+                if self.ga:
+                    dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, res_dic["mask"], ga)
+                else:
+                    dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, res_dic["mask"])
 
                 losses['advg'] = gen_loss * self.adv_weight
 
