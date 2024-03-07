@@ -52,8 +52,8 @@ class Framework(nn.Module):
         x_ref = copy.deepcopy(x_im.detach())
         x_ref = (x_ref*(1-masks).float()) + masks
 
-        # y_ref = self.refineG(x_ref, masks, x_ga)
-        y_ref = self.refineG(x_ref, masks)
+        y_ref = self.refineG(x_ref, masks, x_ga)
+        # y_ref = self.refineG(x_ref, masks)
         y_ref = torch.clamp(y_ref, 0, 1)
         y_ref = self.anomap.zero_pad(y_ref, x_ref.shape[2])
 

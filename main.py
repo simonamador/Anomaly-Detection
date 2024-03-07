@@ -20,15 +20,30 @@ torch.cuda.empty_cache()
 # Obtain all paths needed for training/validation from config
 source_path, model_path, tensor_path, image_path, pre_path = path_generator(args)
 
+# Convert args to a dictionary and add device and paths dynamically
+parameters = vars(args).copy()
+parameters['device'] = device.type  
+parameters['source_path'] = source_path
+parameters['model_path'] = model_path
+parameters['tensor_path'] = tensor_path
+parameters['image_path'] = image_path
+parameters['pre_path'] = pre_path
+
 if __name__ == "__main__":
     if args.task == 'Train':
-        trainer = Trainer(source_path, model_path, tensor_path,
-                        image_path, device, args.batch, args.z, args.ga_method, args.type, 
-                        args.model, args.view, args.n, args.pre, pre_path, args.ga_n, args.raw, args.th, args.cGAN)
+        # trainer = Trainer(source_path, model_path, tensor_path,
+        #                 image_path, device, args.batch, args.z, args.ga_method, args.type, 
+        #                 args.model, args.view, args.n, args.pre, pre_path, args.ga_n, args.raw, args.th, args.cGAN)
+        # trainer = Trainer(parameters['source_path'], parameters['model_path'], parameters['tensor_path'],
+        #                   parameters['image_path'], parameters['device'], parameters['batch'], parameters['z_dim'], 
+        #                   parameters['ga_method'], parameters['type'], parameters['model'], parameters['view'], 
+        #                   parameters['slice_size'], parameters['pre'], parameters['pre_path'], parameters['ga_n'], 
+        #                   parameters['raw'], parameters['th'], parameters['cGAN'])
+        trainer = Trainer(parameters)
         trainer.train(args.epochs, args.loss)
     elif args.task == 'Validate':
         validator = Validator(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
-                    args.z, args.name, args.n, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
+                    args.z_dim, args.name, args.slice_size, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
         #validator.validation()
         #if args.model == 'ga_VAE':
         #    validator.age_differential(delta_ga=5)

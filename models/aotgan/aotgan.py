@@ -8,7 +8,7 @@ from torch.nn.utils import spectral_norm
 
 from models.aotgan.common import BaseNetwork
 
-size = 0
+size = 200
 
 def calculate_ga_index(ga):
         # Map GA to the nearest increment starting from 20 (assuming a range of 20-40 GA)

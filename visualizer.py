@@ -16,7 +16,7 @@ import numpy as np
 from utils.debugging_printers import *
 
 class Visualizer:
-    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw, th = 99):
+    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw, th = 99, cGAN = False):
 
             # Determine if model inputs GA
             self.ga =  base == 'ga_VAE'

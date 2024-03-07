@@ -359,8 +359,8 @@ def settings_parser():
         default='Train',
         help='''
         Task to be performed.''')  
-    parser.add_argument('--model',
-        dest='model',
+    parser.add_argument('--VAE_model_type',
+        dest='VAE_model_type',
         choices=['default', 'ga_VAE'],
         default = 'default',
         required=False,
@@ -442,7 +442,7 @@ def settings_parser():
         The value of the beta parameter.
         ''')
     parser.add_argument('--z_dim',
-        dest='z',
+        dest='z_dim',
         type=int,
         default=512,
         required=False,
@@ -475,13 +475,13 @@ def settings_parser():
         Name for new VAE model.
         '''
             )
-    parser.add_argument('--n',
-        dest='n',
+    parser.add_argument('--slice_size',
+        dest='slice_size',
         type=int,
         default=158,
         required=False,
         help='''
-        size of images from pre-processing.
+        Size of images from pre-processing (n x n).
         ''')
     parser.add_argument('--path',
         dest = 'path',
@@ -538,7 +538,7 @@ def settings_parser():
         ''')
     parser.add_argument(
         '-cGAN_s',
-        '--conditional_GAN', 
+        '--conditional_GAN_size', 
         dest='cGAN',
         action='store_true',
         required=False,

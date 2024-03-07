@@ -13,12 +13,21 @@ from utils import loss as loss_lib
 from utils.debugging_printers import *
 
 class Trainer:
-    def __init__(self, source_path, model_path, tensor_path,
-                 image_path, device, batch, z_dim, method, model, 
-                 base, view, n, pretrained, pretrained_path, ga_n, raw, th = 99, cGAN = False):
+    
+    def __init__ (self,parameters):
+    
+    # def __init__(self, source_path, model_path, tensor_path,
+    #              image_path, device, batch, z_dim, method, model, 
+    #              base, view, n, pretrained, pretrained_path, ga_n, raw, th = 99, cGAN = False):
+        
+        # (parameters['source_path'], parameters['model_path'], parameters['tensor_path'],
+        #                   parameters['image_path'], parameters['device'], parameters['batch'], parameters['z'], 
+        #                   parameters['ga_method'], parameters['type'], parameters['model'], parameters['view'], 
+        #                   parameters['n'], parameters['pre'], parameters['pre_path'], parameters['ga_n'], 
+        #                   parameters['raw'], parameters['th'], parameters['cGAN'])
         
         # Determine if model inputs GA
-        if base == 'ga_VAE':
+        if parameters['VAE_model_type'] == 'ga_VAE':
             self.ga = True
             print('-'*50)
             print('')
@@ -31,15 +40,15 @@ class Trainer:
             print('Training default Model.')
             print('')
 
-        self.device = device
-        self.model_type = model
-        self.model_path = model_path  
-        self.tensor_path = tensor_path 
-        self.image_path = image_path  
-        self.th = th
+        self.device = parameters['device']
+        #self.model_type = parameters['model']
+        self.model_path = parameters['model_path']  
+        self.tensor_path = parameters['tensor_path'] 
+        self.image_path = parameters['image_path']  
+        self.th = parameters['th']
 
         # Generate model
-        self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n, th=self.th)
+        self.model = Framework(parameters['slice_size'], parameters['z_dim'], method, device, model, self.ga, ga_n, th=self.th)
 
         # Load pre-trained parameters
         if pretrained == 'base':
