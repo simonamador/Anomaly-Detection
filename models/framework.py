@@ -19,13 +19,31 @@ class Framework(nn.Module):
         self.refineD = inpainting.Discriminator().to(device)
 
         if ga:
-            from models.ga_vae import Encoder, Decoder
+            #from models.ga_vae import Encoder, Decoder
+            from models.SI_VAE import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, method, model=model, ga_n=ga_n)
             self.decoder = Decoder(n, n, int(z_dim/2) + (ga_n if method in ['ordinal_encoding','one_hot_encoding', 'bpoe'] else 0))
         else:
             from models.vae import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, model = model)
             self.decoder = Decoder(n, n, int(z_dim/2), model = model)
+
+    def decode(self, z):
+        y = self.decoder(z)
+        return y
+    
+    def encode(self, x, ga = None):
+        z_sample, mu, logvar, embed_dict = self.encoder(x, ga)
+        return z_sample, mu, logvar, embed_dict
+
+    def sample(self, z):
+        y = self.decode(z)
+        return y
+    
+    def ae(self, x, ga = None, deterministic=False):
+        z, mu, logvar, embed_dict = self.encode(x, ga)
+        y = self.decode(z).detach()
+        return y, {'z_mu': mu, 'z_logvar': logvar,'z': z, 'embeddings': embed_dict['embeddings']}
 
     def forward(self, x_im, x_ga = None):
         if self.ga:

@@ -15,16 +15,6 @@ from utils.debugging_printers import *
 class Trainer:
     
     def __init__ (self,parameters):
-    
-    # def __init__(self, source_path, model_path, tensor_path,
-    #              image_path, device, batch, z_dim, method, model, 
-    #              base, view, n, pretrained, pretrained_path, ga_n, raw, th = 99, cGAN = False):
-        
-        # (parameters['source_path'], parameters['model_path'], parameters['tensor_path'],
-        #                   parameters['image_path'], parameters['device'], parameters['batch'], parameters['z'], 
-        #                   parameters['ga_method'], parameters['type'], parameters['model'], parameters['view'], 
-        #                   parameters['n'], parameters['pre'], parameters['pre_path'], parameters['ga_n'], 
-        #                   parameters['raw'], parameters['th'], parameters['cGAN'])
         
         # Determine if model inputs GA
         if parameters['VAE_model_type'] == 'ga_VAE':
@@ -45,22 +35,33 @@ class Trainer:
         self.model_path = parameters['model_path']  
         self.tensor_path = parameters['tensor_path'] 
         self.image_path = parameters['image_path']  
-        self.th = parameters['th']
+        self.th = parameters['th'] if parameters['th'] else 99
 
         # Generate model
-        self.model = Framework(parameters['slice_size'], parameters['z_dim'], method, device, model, self.ga, ga_n, th=self.th)
+        self.model = Framework(parameters['slice_size'], parameters['z_dim'], 
+                               parameters['method'], parameters['device'], 
+                               parameters['model'], parameters['ga'], 
+                               parameters['ga_n'], th=self.th)
 
         # Load pre-trained parameters
-        if pretrained == 'base':
-            encoder, decoder = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained, ga_n = ga_n)
+        if parameters['pretrained'] == 'base':
+            encoder, decoder = load_model(parameters['pretrained_path'], parameters['base'], 
+                                          parameters['method'], parameters['slice_size'], 
+                                          parameters['slice_size'], parameters['z_dim'], 
+                                          model=parameters['model'], pre = parameters['pretrained'], 
+                                          ga_n = parameters['ga_n'])
             self.model.encoder = encoder
             self.model.decoder = decoder
-        if pretrained == 'refine':
-            refineG, refineD = load_model(pretrained_path, base, method, n, n, z_dim, model=model, pre = pretrained, ga_n = ga_n)
+        if parameters['pretrained'] == 'refine':
+            refineG, refineD = load_model(parameters['pretrained_path'], parameters['base'], 
+                                          parameters['method'], parameters['slice_size'],
+                                          parameters['slice_size'], parameters['z_dim'], 
+                                          model=parameters['model'], pre = parameters['pretrained'],
+                                          ga_n = parameters['ga_n'])
             self.model.refineG = refineG
             self.model.refineD = refineD
         prGreen('Model successfully instanciated...')
-        self.pre = pretrained
+        self.pre = parameters['pretrained']
 
         # Load losses
         self.base_loss = {'L2': loss_lib.l2_loss, 'L1': loss_lib.l1_loss, 'SSIM': loss_lib.ssim_loss, 
@@ -77,7 +78,9 @@ class Trainer:
         prGreen('Losses successfully loaded...')
 
         # Establish data loaders
-        train_dl, val_dl = loader(source_path, view, batch, n, raw = raw)
+        train_dl, val_dl = loader(parameters['source_path'], parameters['view'], 
+                                  parameters['batch'], parameters['z_dim'], 
+                                  raw = parameters['raw'])
         self.loader = {"tr": train_dl, "ts": val_dl}
         prGreen('Data loaders successfully loaded...')
         

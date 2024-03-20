@@ -8,15 +8,15 @@ from torch.nn.utils import spectral_norm
 
 from models.aotgan.common import BaseNetwork
 
-size = 200
+#size = 200
 
-def calculate_ga_index(ga):
+def calculate_ga_index(ga, size):
         # Map GA to the nearest increment starting from 20 (assuming a range of 20-40 GA)
         increment = (40-20)/size
         ga_mapped = torch.round((ga - 20) / increment)
         return ga_mapped
 
-def create_bi_partitioned_ordinal_vector(gas):
+def create_bi_partitioned_ordinal_vector(gas, size):
         # Adjusting the threshold for the nearest 0.1 increment
         threshold_index = size//2
         device = gas.device
@@ -45,10 +45,12 @@ def create_bi_partitioned_ordinal_vector(gas):
 
 
 class InpaintGenerator(BaseNetwork):
-    def __init__(self, rates='1+2+4+8', block_num=8):  # 1046
+    def __init__(self, rates='1+2+4+8', block_num=8, BOE_size=0):  # 1046
         nr_channels = 1
         rates=[1, 2, 4, 8]
         super(InpaintGenerator, self).__init__()
+
+        self.BOE_size = BOE_size
 
         self.encoder = nn.Sequential(
             nn.ReflectionPad2d(3),
@@ -60,10 +62,10 @@ class InpaintGenerator(BaseNetwork):
             nn.ReLU(True)
         )
 
-        self.middle = nn.Sequential(*[AOTBlock(256+size, rates) for _ in range(block_num)])
+        self.middle = nn.Sequential(*[AOTBlock(256+self.BOE_size, rates) for _ in range(block_num)])
 
         self.decoder = nn.Sequential(
-            UpConv(256+size, 128),
+            UpConv(256+self.BOE_size, 128),
             nn.ReLU(True),
             UpConv(128, 64),
             nn.ReLU(True),
@@ -91,7 +93,7 @@ class InpaintGenerator(BaseNetwork):
 
         if ga is not None:
             # Encode GA using your method
-            encoded_ga = create_bi_partitioned_ordinal_vector(ga)
+            encoded_ga = create_bi_partitioned_ordinal_vector(ga, self.BOE_size)
             # You may need to expand the dimensions to match x
             encoded_ga_expanded = encoded_ga.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, x.size(2), x.size(3))
             # Concatenate encoded GA with the feature map
@@ -152,9 +154,10 @@ def my_layer_norm(feat):
 
 # ----- discriminator -----
 class Discriminator(BaseNetwork):
-    def __init__(self, ):
+    def __init__(self,  BOE_size=0):
         super(Discriminator, self).__init__()
         inc = 1
+        self.BOE_size = BOE_size
         self.conv = nn.Sequential(
             spectral_norm(nn.Conv2d(inc, 64, 4, stride=2, padding=1, bias=False)),
             nn.LeakyReLU(0.2, inplace=True),
@@ -177,7 +180,7 @@ class Discriminator(BaseNetwork):
     def forward(self, x, ga=None):
         if ga is not None:
             # Encode GA using the same function as in the generator
-            encoded_ga = create_bi_partitioned_ordinal_vector(ga)
+            encoded_ga = create_bi_partitioned_ordinal_vector(ga, self.size)
             # Expand GA to match feature dimensions and concatenate
             encoded_ga_expanded = encoded_ga.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, x.size(2), x.size(3))
             x = torch.cat([x, encoded_ga_expanded], dim=1)

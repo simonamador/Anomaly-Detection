@@ -8,6 +8,146 @@ from scipy.ndimage.filters import gaussian_filter
 
 from utils.vgg import VGG19
 
+import torch.nn as nn
+import torchvision
+from torch.nn.modules.loss import _Loss
+
+
+def calc_reconstruction_loss(x, recon_x, loss_type='mse', reduction='sum'):
+    """
+    :param x: original inputs
+    :param recon_x:  reconstruction of the VAE's input
+    :param loss_type: "mse", "l1", "bce"
+    :param reduction: "sum", "mean", "none"
+    :return: recon_loss
+    """
+    if reduction not in ['sum', 'mean', 'none']:
+        raise NotImplementedError
+    recon_x = recon_x.view(recon_x.size(0), -1)
+    x = x.view(x.size(0), -1)
+    if loss_type == 'mse':
+        recon_error = F.mse_loss(recon_x, x, reduction='none')
+        recon_error = recon_error.sum(1)
+        if reduction == 'sum':
+            recon_error = recon_error.sum()
+        elif reduction == 'mean':
+            recon_error = recon_error.mean()
+    elif loss_type == 'l1':
+        recon_error = F.l1_loss(recon_x, x, reduction=reduction)
+    elif loss_type == 'bce':
+        recon_error = F.binary_cross_entropy(recon_x, x, reduction=reduction)
+    else:
+        raise NotImplementedError
+    return recon_error
+
+def calc_kl(logvar, mu, mu_o=0.0, logvar_o=0.0, reduce='sum'):
+    """
+    Calculate kl-divergence
+    :param logvar: log-variance from the encoder
+    :param mu: mean from the encoder
+    :param mu_o: negative mean for outliers (hyper-parameter)
+    :param logvar_o: negative log-variance for outliers (hyper-parameter)
+    :param reduce: type of reduce: 'sum', 'none'
+    :return: kld
+    """
+    if not isinstance(mu_o, torch.Tensor):
+        mu_o = torch.tensor(mu_o).to(mu.device)
+    if not isinstance(logvar_o, torch.Tensor):
+        logvar_o = torch.tensor(logvar_o).to(mu.device)
+    kl = -0.5 * (1 + logvar - logvar_o - logvar.exp() / torch.exp(logvar_o) - (mu - mu_o).pow(2) / torch.exp(
+        logvar_o)).sum(1)
+    if reduce == 'sum':
+        kl = torch.sum(kl)
+    elif reduce == 'mean':
+        kl = torch.mean(kl)
+    return kl
+
+
+class VGGEncoder(nn.Module):
+    """
+    VGG Encoder used to extract feature representations for e.g., perceptual losses
+    """
+    def __init__(self, layers=[1, 6, 11, 20]):
+        super(VGGEncoder, self).__init__()
+        vgg = torchvision.models.vgg19(pretrained=True).features
+        self.encoder = nn.ModuleList()
+        temp_seq = nn.Sequential()
+        for i in range(max(layers) + 1):
+            temp_seq.add_module(str(i), vgg[i])
+            if i in layers:
+                self.encoder.append(temp_seq)
+                temp_seq = nn.Sequential()
+
+    def forward(self, x):
+        features = []
+        for layer in self.encoder:
+            x = layer(x)
+            features.append(x)
+        return features
+
+
+
+
+class EmbeddingLoss(torch.nn.Module):
+    def __init__(self):
+        super(EmbeddingLoss, self).__init__()
+        self.criterion = torch.nn.MSELoss()
+        self.similarity_loss = torch.nn.CosineSimilarity()
+
+    def forward(self, teacher_embeddings, student_embeddings):
+        # print(f'LEN {len(output_real)}')
+        layer_id = 0
+        # teacher_embeddings = teacher_embeddings[:-1]
+        # student_embeddings = student_embeddings[3:-1]
+        # print(f' Teacher: {len(teacher_embeddings)}, Student: {len(student_embeddings)}')
+        for teacher_feature, student_feature in zip(teacher_embeddings, student_embeddings):
+            if layer_id == 0:
+                total_loss = 0.5 * self.criterion(teacher_feature, student_feature)
+            else:
+                total_loss += 0.5 * self.criterion(teacher_feature, student_feature)
+            total_loss += torch.mean(1 - self.similarity_loss(teacher_feature.view(teacher_feature.shape[0], -1),
+                                                         student_feature.view(student_feature.shape[0], -1)))
+            layer_id += 1
+        return total_loss
+
+
+class PerceptualLoss(_Loss):
+    """
+    """
+
+    def __init__(
+        self,
+        reduction: str = 'mean',
+        device: str = 'gpu') -> None:
+        """
+        Args
+            reduction: str, {'none', 'mean', 'sum}
+                Specifies the reduction to apply to the output. Defaults to ``"mean"``.
+                - 'none': no reduction will be applied.
+                - 'mean': the sum of the output will be divided by the number of elements in the output.
+                - 'sum': the output will be summed.
+        """
+        super().__init__()
+        self.device = device
+        self.reduction = reduction
+        self.loss_network = VGGEncoder().eval().to(self.device)
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor):
+        """
+        Args:
+            input: (N,*),
+                where N is the batch size and * is any number of additional dimensions.
+            target (N,*),
+                same shape as input.
+        """
+        input_features = self.loss_network(input.repeat(1, 3, 1, 1)) if input.shape[1] == 1 else input
+        output_features = self.loss_network(target.repeat(1, 3, 1, 1)) if target.shape[1] == 1 else target
+
+        loss_pl = 0
+        for output_feature, input_feature in zip(output_features, input_features):
+            loss_pl += F.mse_loss(output_feature, input_feature)
+        return loss_pl
+
 def kld_loss(mu, log_var):
     kld = -0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp())
     return kld

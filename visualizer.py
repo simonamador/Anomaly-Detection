@@ -16,40 +16,57 @@ import numpy as np
 from utils.debugging_printers import *
 
 class Visualizer:
-    def __init__(self, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw, th = 99, cGAN = False):
+    def __init__(self, parameters):
+                 
+                 
+                 #, path, model_path, base, model, view, method, z_dim, name, n, device, training_folder, ga_n, raw, th = 99, cGAN = False):
+            
+            # visualizer = Visualizer(args.path, model_path, args.VAE_model_type, args.type, args.view, args.ga_method, 
+            # args.z_dim, args.name, args.slice_size, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
 
             # Determine if model inputs GA
-            self.ga =  base == 'ga_VAE'
-            model_name = name + '_' + view
+            self.ga =  parameters['VAE_model_type'] == 'ga_VAE'
+            model_name = parameters['name'] + '_' + parameters['view']
             print(f'{self.ga=}')
-            print(f'{z_dim=}')
+            print(f'{parameters["z_dim"]=}')
             
 
-            self.view = view
-            self.device = device
-            self.raw = raw
+            self.view = parameters['view']
+            self.device = parameters['device']
+            self.raw = parameters['raw']
             
-            prGreen(f'{device=}')
+            prGreen(f'{parameters["device"]=}')
+
+            self.th = parameters['th'] if parameters['th'] else 99
 
             # Generate and load model
-            print(model_path)
-            self.model = Framework(n, z_dim, method, device, model, self.ga, ga_n, th = th)
+            print(parameters['model_path'])
+            self.model = Framework(parameters['slice_size'], parameters['z_dim'], 
+                                   parameters['ga_method'], parameters['device'], 
+                                   parameters['model_path'], self.ga, parameters['ga_n'], 
+                                   th = self.th)
             
-            self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
-                                                                n, n, z_dim, model=model, pre = 'full', ga_n=ga_n)
+            # self.model.encoder, self.model.decoder, self.model.refineG = load_model(model_path, base, method, 
+            #                                                     n, n, z_dim, model=model, pre = 'full', ga_n=ga_n)
+
+            self.model.encoder, self.model.decoder, self.model.refineG = load_model(parameters['model_path'], parameters['VAE_model_type'], 
+                                                                                parameters['ga_method'], parameters['slice_size'], 
+                                                                                parameters['slice_size'], parameters['z_dim'], 
+                                                                                model=parameters['model_path'], pre = 'full', 
+                                                                                ga_n = parameters['ga_n'])
         
             # Visualization paths
-            self.hist_path = path+'Results' + model_name + '/history.txt'
-            self.vis_path = path+'Results/Visualization/'+model_name+'/'
+            self.hist_path = parameters['path']+'Results' + model_name + '/history.txt'
+            self.vis_path = parameters['path']+'Results/Visualization/'+model_name+'/'
 
             if not os.path.exists(self.vis_path):
                 os.mkdir(self.vis_path)
                 os.mkdir(self.vis_path+'TD/')
                 os.mkdir(self.vis_path+'VM/')
 
-            self.vm_path = path+ ('/VM_dataset/Raw/' if not raw else '/VM_dataset_raw/Raw/')
+            self.vm_path = parameters['path']+ ('/VM_dataset/Raw/' if not parameters['raw'] else '/VM_dataset_raw/Raw/')
             self.vm_images = os.listdir(self.vm_path)
-            self.td_path = path+training_folder+'/test/'
+            self.td_path = parameters['path']+parameters['training_folder']+'/test/'
             self.td_images= os.listdir(self.td_path)
 
     

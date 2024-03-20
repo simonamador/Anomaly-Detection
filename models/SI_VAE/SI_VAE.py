@@ -154,7 +154,7 @@ class Encoder(nn.Module):
             ga = self.normalize(ga)
 
         # TODO
-        # embeddings = []
+        embeddings = []
 
         # for layer in self.main:
         #     y = layer(y)
@@ -162,13 +162,13 @@ class Encoder(nn.Module):
         #         embeddings.append(y)
 
         x = self.step0(x)
-        # embeddings.append(x)
+        embeddings.append(x)
         x = self.step1(x)
-        # embeddings.append(x)
+        embeddings.append(x)
         x = self.step2(x)
-        # embeddings.append(x)
+        embeddings.append(x)
         x = self.step3(x)
-        # embeddings.append(x)
+        embeddings.append(x)
 
         x = x.view(-1, self.flat_n)
 
@@ -178,20 +178,14 @@ class Encoder(nn.Module):
         z_params = self.linear(x)
         
 
-        if self.method == 'concat':
+        if self.method == 'concat': # could condition here with the ga
             z_params = torch.cat((z_params,ga), 1)
             
-
         # TODO
-        # mu, logvar = z_params.chunk(2, dim=1)
         mu, log_std = torch.chunk(z_params, 2, dim=1)
 
         # TODO
-        # z_sample = reparameterize(mu, log_std) # (std, epd) => mu + eps * std
-        
-        std = torch.exp(log_std)
-        z_dist = dist.Normal(mu, std)
-        z_sample = z_dist.rsample()
+        z_sample = reparameterize(mu, log_std) # (std, epd) => mu + eps * std
 
         # ------ Instead of concatenating to the params, perform the operation on the sample ------
         if self.method in ['concat_sample', 'ordinal_encoding', 'one_hot_encoding', 'bpoe']:
@@ -203,7 +197,7 @@ class Encoder(nn.Module):
         if self.model == 'bVAE':
             return z_sample, mu, log_std
         
-        return z_sample
+        return z_sample, mu, log_std, {'embeddings': embeddings}
    
 # Decoder class builds decoder model depending on the model type.
 # Inputs: H, y (x and y size of the MRI slice),z_dim (length of the input z-vector), model (the model type) 

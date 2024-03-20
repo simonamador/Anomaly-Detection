@@ -31,19 +31,12 @@ parameters['pre_path'] = pre_path
 
 if __name__ == "__main__":
     if args.task == 'Train':
-        # trainer = Trainer(source_path, model_path, tensor_path,
-        #                 image_path, device, args.batch, args.z, args.ga_method, args.type, 
-        #                 args.model, args.view, args.n, args.pre, pre_path, args.ga_n, args.raw, args.th, args.cGAN)
-        # trainer = Trainer(parameters['source_path'], parameters['model_path'], parameters['tensor_path'],
-        #                   parameters['image_path'], parameters['device'], parameters['batch'], parameters['z_dim'], 
-        #                   parameters['ga_method'], parameters['type'], parameters['model'], parameters['view'], 
-        #                   parameters['slice_size'], parameters['pre'], parameters['pre_path'], parameters['ga_n'], 
-        #                   parameters['raw'], parameters['th'], parameters['cGAN'])
         trainer = Trainer(parameters)
         trainer.train(args.epochs, args.loss)
     elif args.task == 'Validate':
-        validator = Validator(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
-                    args.z_dim, args.name, args.slice_size, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
+        # validator = Validator(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
+        #             args.z_dim, args.name, args.slice_size, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
+        validator = Validator(parameters)
         #validator.validation()
         #if args.model == 'ga_VAE':
         #    validator.age_differential(delta_ga=5)
@@ -53,8 +46,9 @@ if __name__ == "__main__":
         #validator.multiview_AUROC_ASL()
         #validator.multiview_AUROC_AS()
     elif args.task == 'Visualize':
-        visualizer = Visualizer(args.path, model_path, args.model, args.type, args.view, args.ga_method, 
-                    args.z, args.name, args.n, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
+        # visualizer = Visualizer(args.path, model_path, args.VAE_model_type, args.type, args.view, args.ga_method, 
+        #             args.z_dim, args.name, args.slice_size, device, args.training_folder, args.ga_n, args.raw, args.th, args.cGAN)
+        visualizer = Visualizer(parameters)
         #visualizer.visualize_age_effect()
         #visualizer.save_reconstruction_images()
         visualizer.save_whole_range_plus_refined(TD=True)
