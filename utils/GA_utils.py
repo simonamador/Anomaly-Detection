@@ -28,7 +28,7 @@ if __name__ == '__main__':
     prGreen('Testing data adaptation strategy')
     prGreen('-'*50)
     try:
-        train_dl, val_dl = loader(source_path='/neuro/labs/grantlab/research/MRI_processing/guillermo.tafoya/Anomaly_Detection/main/TD_dataset_GA/', view='S', batch_size=32, h=158)
+        train_dl, val_dl = loader(source_path='/neuro/labs/grantlab/research/MRI_processing/guillermo.tafoya/Anomaly_Detection/main/TD_dataset_raw_complete/', view='A', batch_size=32, h=158, raw = True)
         prGreen('Loading successful')
     except Exception as e: 
         prRed(f'Something went wrong: {e}')

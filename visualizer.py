@@ -52,19 +52,23 @@ class Visualizer:
             self.model.encoder, self.model.decoder, self.model.refineG = load_model(parameters['model_path'], parameters['VAE_model_type'], 
                                                                                 parameters['ga_method'], parameters['slice_size'], 
                                                                                 parameters['slice_size'], parameters['z_dim'], 
-                                                                                model=parameters['model_path'], pre = 'full', 
+                                                                                model=parameters['type'], pre = 'full', 
                                                                                 ga_n = parameters['ga_n'])
         
             # Visualization paths
             self.hist_path = parameters['path']+'Results' + model_name + '/history.txt'
             self.vis_path = parameters['path']+'Results/Visualization/'+model_name+'/'
 
-            if not os.path.exists(self.vis_path):
-                os.mkdir(self.vis_path)
-                os.mkdir(self.vis_path+'TD/')
-                os.mkdir(self.vis_path+'VM/')
+            
+            os.makedirs(self.vis_path, exist_ok=True)
+            os.makedirs(self.vis_path+'Whole/', exist_ok=True)
+            os.makedirs(self.vis_path+'Whole/TD/', exist_ok=True)
+            os.makedirs(self.vis_path+'Whole/VM/', exist_ok=True)
+            os.makedirs(self.vis_path+'Process/', exist_ok=True)
+            os.makedirs(self.vis_path+'Process/TD/', exist_ok=True)
+            os.makedirs(self.vis_path+'Process/VM/', exist_ok=True)
 
-            self.vm_path = parameters['path']+ ('/VM_dataset/Raw/' if not parameters['raw'] else '/VM_dataset_raw/Raw/')
+            self.vm_path = parameters['path']+ ('/VM_dataset/Raw/' if not parameters['raw'] else '/VM_symposium/Raw/')
             self.vm_images = os.listdir(self.vm_path)
             self.td_path = parameters['path']+parameters['training_folder']+'/test/'
             self.td_images= os.listdir(self.td_path)
@@ -205,22 +209,30 @@ class Visualizer:
     
     # find_nonzero_bounding_box_3(normalized_slice, percentile=80, file_name=f'{case}_central_{view}_normalized_slice_with_bbox.png')
 
-    def save_reconstruction_images(self, delta_ga=10):
+    def save_reconstruction_images(self, delta_ga=10, TD = True):
         model = self.model.to(self.device)
+        images = self.td_images if TD else self.vm_images
 
         loader = val_loader(self.td_path, self.td_images, self.view, raw = self.raw)
 
         prev = ''
         reconstructed = 0
 
+        sv_path = self.vis_path + ''
+        
+
         for id, slice in enumerate(loader):
-            if self.td_images[int(id/30)][:-4] == prev:
+            if images[int(id / 30)][:-4] == prev:
                 continue
-            prev = self.td_images[int(id/30)][:-4]
+            prev = images[int(id / 30)][:-4]
             img = slice['image'].to(self.device)
+            original_img = np.rot90(img.detach().cpu().numpy().squeeze(), 1)  # Assuming img is a single-channel image
             ga = slice['ga'].to(self.device)
-            ga_copy = ga.clone().detach().cpu().numpy()
-            ga_variation = np.arange(ga_copy - delta_ga, ga_copy + delta_ga + 1, 1)
+            original_ga = ga.clone().detach().cpu().numpy().item()  # Get original GA as a float
+            ga_variation = np.arange(20, 41, 1)  # Original range of gestational ages
+
+            # Append the original GA to the range and ensure all values are unique
+            ga_variation = np.unique(np.append(ga_variation, original_ga))
 
             for ga_val in ga_variation:
                 ga_alt = torch.tensor([[ga_val]], dtype=torch.float).to(self.device)
@@ -234,9 +246,9 @@ class Visualizer:
                 ax.set_title(f'GA: {ga_val:.2f}')
                 ax.axis('off')
 
-                os.makedirs(self.vis_path+'TD/'+self.td_images[int(id/30)][:-4], exist_ok=True)
+                os.makedirs(self.vis_path+'Whole/TD/'+self.td_images[int(id/30)][:-4], exist_ok=True)
 
-                fig.savefig(self.vis_path+'TD/'+self.td_images[int(id/30)][:-4]+'/'+str(id-30*int(id/30))+'_'+str(ga_val)+'.png')
+                fig.savefig(self.vis_path+'Whole/TD/'+self.td_images[int(id/30)][:-4]+'/'+str(id-30*int(id/30))+'_'+str(ga_val)+'.png')
                 plt.close(fig)  # Close the figure to free memory
 
                 # Optional: Print out a status message
@@ -340,7 +352,7 @@ class Visualizer:
 
                 # Adjust subplot parameters and save the figure
                 fig.subplots_adjust(hspace=0.1, wspace=0.1)
-                folder_path = self.vis_path + ('TD/' if TD else 'VM/') + images[int(id / 30)][:-4]
+                folder_path = self.vis_path + 'Process/' + ('TD/' if TD else 'VM/') + images[int(id / 30)][:-4]
                 os.makedirs(folder_path, exist_ok=True)
                 comparison_filename = f'{str(id - 30 * int(id / 30))}_{str(ga_val)}.png'
                 fig.savefig(os.path.join(folder_path, comparison_filename))
@@ -351,6 +363,6 @@ class Visualizer:
                 print(f'Saved multi-image comparison for GA value {ga_val:.2f}')
 
             print(f'Processed {folder_path}')
-            if reconstructed >= 14:  
+            if reconstructed >= 15:  
                 break
             reconstructed += 1

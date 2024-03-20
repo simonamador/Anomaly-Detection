@@ -31,6 +31,7 @@ class Encoder(nn.Module):
         self.method = method
         self.model = model
         self.size = ga_n
+        print(f'model {z_dim=}')
 
         # Reduce dimension size by 1 to account for the concatenation of GA
         if method == 'concat':
@@ -50,6 +51,9 @@ class Encoder(nn.Module):
         n_h = int(((h-k_size)/(stride**4)) - (k_size-1)/(stride**3) - (k_size-1)/(stride**2) - (k_size-1)/stride + 1)
         n_w = int(((w-k_size)/(stride**4)) - (k_size-1)/(stride**3) - (k_size-1)/(stride**2) - (k_size-1)/stride + 1)
         self.flat_n = n_h * n_w * ch * 8
+        print(f'{self.flat_n=}')
+        print(f'{self.method=}')
+        print(f'{self.model=}')
         self.linear = nn.Linear(self.flat_n,z_dim)
 
     def standardize(self,x):
@@ -139,17 +143,26 @@ class Encoder(nn.Module):
         else:
             #ga = self.standardize(ga)
             ga = self.normalize(ga)
+
+        # print(f'{x.shape=}')
             
 
         x = self.step0(x)
+        # print(f'{x.shape=}')
         x = self.step1(x)
+        # print(f'{x.shape=}')
         x = self.step2(x)
+        # print(f'{x.shape=}')
         x = self.step3(x)
+        # print(f'{x.shape=}')
         x = x.view(-1, self.flat_n)
+        # print(f'{x.shape=}')
         z_params = self.linear(x)
 
         if self.method == 'concat':
             z_params = torch.cat((z_params,ga), 1)
+
+        # print(f'{z_params.shape=}')
             
 
         mu, log_std = torch.chunk(z_params, 2, dim=1)
@@ -157,6 +170,7 @@ class Encoder(nn.Module):
         z_dist = dist.Normal(mu, std)
 
         z_sample = z_dist.rsample()
+        # print(f'{z_sample.shape=}')
 
         # ------ Instead of concatenating to the params, perform the operation on the sample ------
         if self.method in ['concat_sample', 'ordinal_encoding', 'one_hot_encoding', 'bpoe']:

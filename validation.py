@@ -13,6 +13,7 @@ import seaborn as sns
 import pandas as pd
 import os
 import numpy as np
+import scipy.stats as stts
 
 class Validator:
     def __init__(self, parameters):
@@ -39,7 +40,7 @@ class Validator:
         print(parameters['model_path'])
         self.model = Framework(parameters['slice_size'], parameters['z_dim'], 
                                parameters['ga_method'], parameters['device'], 
-                               parameters['model_path'], parameters['ga'], 
+                               parameters['model_path'], self.ga, 
                                parameters['ga_n'], th=self.th)
         
         self.model.encoder, self.model.decoder, self.model.refineG = load_model(parameters['model_path'], parameters['VAE_model_type'], 
@@ -60,7 +61,7 @@ class Validator:
             os.mkdir(self.val_path+'TD/')
             os.mkdir(self.val_path+'VM/')
 
-        self.vm_path = parameters['path']+ ('/VM_dataset/Raw/' if not parameters['raw'] else '/VM_dataset_raw/Raw/') #path+'/VM_dataset/Raw/'
+        self.vm_path = parameters['path']+ ('/VM_dataset/Raw/' if not parameters['raw'] else '/VM_symposium/Raw/') #path+'/VM_dataset/Raw/'
         self.vm_images = os.listdir(self.vm_path)
         self.td_path = parameters['path']+parameters['training_folder']+'test/'
         self.td_images= os.listdir(self.td_path)
@@ -268,7 +269,8 @@ class Validator:
                 
                 for ga_alt in ga_variation:
                     ga_alt = torch.tensor(np.expand_dims([ga_alt], axis = 0), dtype = torch.float).to(self.device)
-                    z = self.model.encoder(img, ga_alt)
+                    # z = self.model.encoder(img, ga_alt)
+                    z, _, _, _ = self.model.encoder(img, ga_alt)
                     recon = self.model.decoder(z)
                     # Extract metrics
                     MAE = l1_loss(img, recon).item()
@@ -427,6 +429,320 @@ class Validator:
         
         plt.savefig(self.val_path+view+'_AUROC.png')
         #plt.show()
+
+
+
+    def calculate_multiview_auroc_and_mannwhitneyu(self):
+        from sklearn.metrics import roc_auc_score, roc_curve, auc #accuracy_score, confusion_matrix, roc_auc_score, roc_curve
+        from scipy import interp
+        from numpy import linspace
+        import altair as alt
+
+        # views = ['L', 'A', 'S']  # Sagittal, Coronal, Axial
+        # view_labels = ['Sagittal', 'Coronal', 'Axial']
+        views = ['L', 'A', 'S']  # Sagittal, Coronal, Axial
+        view_labels = ['Sagittal', 'Coronal', 'Axial']
+        combined_base_fpr = linspace(0, 1, 101)
+        combined_tpr = []
+        auroc_scores = []
+
+        all_stats = []
+        view_data = []
+
+        for index, view in enumerate(views):
+            # Modify val_path to replace the last character (view letter) and remove final slash if needed
+            base_val_path = self.val_path[:-2]  # Remove view letter and slash
+            current_val_path = f"{base_val_path}{view}/"  # Append current view letter with a slash
+
+            # Load data for current view
+            df = pd.read_csv(current_val_path + 'validation.txt', sep=', ')  # Adjust based on your actual data file
+            df['View'] = view_labels[index]  # Add a 'View' column to label the current view
+            view_data.append(df)
+
+            # Filter for each class
+            # td_df = df[df['Class'] == 'td']
+            # vm_df = df[df['Class'] == 'vm']
+
+            # Filter for Slide_ID 15
+            td_df = df[(df['Class'] == 'td') & (df['Slide_ID'] == 15)]
+            vm_df = df[(df['Class'] == 'vm') & (df['Slide_ID'] == 15)]
+
+            # Mann-Whitney U Tests
+            stat_mse, p_mse = stts.mannwhitneyu(td_df['MSE'], vm_df['MSE'])
+            stat_mae, p_mae = stts.mannwhitneyu(td_df['MAE'], vm_df['MAE'])
+            stat_anom, p_anom = stts.mannwhitneyu(td_df['Anomaly'], vm_df['Anomaly'])
+
+            
+
+            n_td = len(td_df)
+            n_vm = len(vm_df)
+            max_U_mse = n_td * n_vm
+            max_U_mae = n_td * n_vm
+            max_U_anom = n_td * n_vm
+
+            print("Maximum possible U value for MSE:", max_U_mse)
+            print("Maximum possible U value for MAE:", max_U_mae)
+            print("Maximum possible U value for Anomaly:", max_U_anom)
+
+            # Compute means and standard deviations for TD
+            td_means = td_df[['MSE', 'MAE', 'Anomaly']].mean().tolist()
+            td_stds = td_df[['MSE', 'MAE', 'Anomaly']].std().tolist()
+
+            # Compute means and standard deviations for VM
+            vm_means = vm_df[['MSE', 'MAE', 'Anomaly']].mean().tolist()
+            vm_stds = vm_df[['MSE', 'MAE', 'Anomaly']].std().tolist()
+
+            # Aggregate stats for Mann-Whitney U for each view
+            # stats = {
+            #     'View': view_labels[index],
+            #     'U_Stats': [stat_mse, stat_mae, stat_anom],
+            #     'P_Values': [p_mse, p_mae, p_anom]
+            # }
+            stats = {
+                'View': view_labels[index],
+                'TD_Means': td_means,
+                'TD_Stds': td_stds,
+                'VM_Means': vm_means,
+                'VM_Stds': vm_stds,
+                'U_Stats': [stat_mse, stat_mae, stat_anom],
+                'P_Values': [p_mse, p_mae, p_anom]
+            }
+            all_stats.append(stats)
+
+            # AUROC calculations
+            y_true = np.concatenate((np.zeros(len(td_df)), np.ones(len(vm_df))))
+            scores = np.concatenate((td_df['Anomaly'].values, vm_df['Anomaly'].values))
+            auroc = roc_auc_score(y_true, scores)
+            print(f"{view} AUROC: {auroc}")
+            fpr, tpr, _ = roc_curve(y_true, scores)
+            smooth_tpr = interp(combined_base_fpr, fpr, tpr)
+            smooth_tpr[0] = 0.0  # Ensure it starts at 0
+            combined_tpr.append(smooth_tpr)
+            auroc_scores.append(auroc)
+
+        # After looping through all views
+
+        # Plotting combined ROC curves
+        # plt.figure(figsize=(10, 10))
+        # for i, view_label in enumerate(view_labels):
+        #     plt.plot(combined_base_fpr, combined_tpr[i], label=f'{view_label} view (area = {auroc_scores[i]:.2f})')
+        # plt.plot([0, 1], [0, 1], 'k--')
+        # plt.xlabel('1 - Specificity')
+        # plt.ylabel('Sensitivity')
+        # plt.title('Receiver Operating Characteristic')
+        # plt.legend(loc='lower right')
+        # plt.savefig(base_val_path + 'Combined_AUROC.png')  # Saving to the base directory
+        # plt.close()
+
+        plt.figure(figsize=(10, 10))
+        for i, view_label in enumerate(view_labels):
+            plt.plot(combined_base_fpr, combined_tpr[i], label=f'{view_label} View AUROC = {auroc_scores[i]:.2f}', linewidth=2)  # Increased line width for better visibility
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlabel('1 - Specificity', fontsize=14)
+        plt.ylabel('Sensitivity', fontsize=14)
+        plt.title('Receiver Operating Characteristic', fontsize=16)
+        plt.legend(loc='lower right', fontsize=20)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        ax = plt.gca()  # Get the current Axes instance
+        ax.set_facecolor('white')  
+        plt.tight_layout()
+        # plt.savefig(base_val_path + 'Combined_AUROC_test.png', bbox_inches='tight')  # Save the plot with less whitespace
+        plt.savefig(base_val_path + 'Combined_AUROC.png', bbox_inches='tight', transparent=True, facecolor=ax.get_facecolor())
+        plt.close()
+
+
+        
+
+        # # Print or handle the aggregated statistics as needed
+        # for stat in all_stats:
+        #     print(f"{stat['View']} View:")
+        #     print(f"U Statistics (MSE, MAE, Anomaly): {stat['U_Stats']}")
+        #     print(f"P-values (MSE, MAE, Anomaly): {stat['P_Values']}")
+        #     print("\n")
+
+        # fig, ax = plt.subplots(figsize=(10, 6))  # Adjust size as needed for your table
+        # ax.axis('off')  
+
+        # def format_p_value(p): return "<0.01" if p < 0.01 else f"{p:.2f}"
+
+        # # Initialize table data with headers
+        # table_data = [['View', 'U (MSE)', 'U (MAE)', 'U (Anomaly)', 'P (MSE)', 'P (MAE)', 'P (Anomaly)']]
+
+        # # Populate the table data with your statistics
+        # for stat in all_stats:
+        #     # Process each row's p-values
+        #     formatted_p_values = [format_p_value(p) for p in stat['P_Values']]
+        #     # Append the row to your table data
+        #     table_data.append([stat['View']] + stat['U_Stats'] + formatted_p_values)
+
+        # # Create and configure the table
+        # fig, ax = plt.subplots(figsize=(14, 6))  
+        # ax.axis('off') 
+        # table = ax.table(cellText=table_data, loc='center', cellLoc='center')
+        # table.auto_set_font_size(False)
+        # table.set_fontsize(10)
+        # table.scale(1.2, 1.2)  
+        # plt.tight_layout()
+        # plt.savefig(base_val_path + 'Combined_Statistics.png') 
+        # plt.close()
+
+        def format_p_value(p): return ("<0.01", True) if p < 0.01 else (f"{p:.4f}", False)
+
+
+
+        # TD Table Data Initialization
+        td_table_data = [['View', 'MSE Mean', 'MSE SD', 'MAE Mean', 'MAE SD', 'Anomaly Mean', 'Anomaly SD']]
+
+        # VM Table Data Initialization
+        vm_table_data = [['View', 'MSE Mean', 'MSE SD', 'MAE Mean', 'MAE SD', 'Anomaly Mean', 'Anomaly SD']]
+
+        # Populate the tables
+        for stat in all_stats:
+            # TD data
+            td_row = [stat['View']] + [f"{x:.4f}" for x in stat['TD_Means']] + [f"{x:.4f}" for x in stat['TD_Stds']]
+            td_table_data.append(td_row)
+
+            # VM data
+            vm_row = [stat['View']] + [f"{x:.4f}" for x in stat['VM_Means']] + [f"{x:.4f}" for x in stat['VM_Stds']]
+            vm_table_data.append(vm_row)
+
+        def create_and_save_table(data, filename, title, figsize=(10, 2)):
+            from matplotlib.font_manager import FontProperties
+
+            # Set up the figure and axis
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.axis('off')  # Hide the axes
+            ax.set_title(title, fontweight="bold") 
+
+            # Initialize cell text and formatting arrays
+            cell_text = []
+            cell_text_format = []  # Boolean array for whether cell should be bold
+
+            # Populate cell text and format arrays
+            for row in data:
+                cell_row = []
+                format_row = []
+                for item in row:
+                    # Assuming item is just data if not involving p-value comparison, or a tuple (text, needs_bold)
+                    if isinstance(item, tuple):
+                        print(item)
+                        cell_row.append(item[0])
+                        format_row.append(item[1])
+                    else:
+                        cell_row.append(item)
+                        format_row.append(False)
+                cell_text.append(cell_row)
+                cell_text_format.append(format_row)
+
+            from pprint import pprint
+            pprint(cell_text)
+            pprint(cell_text_format)
+
+            # Create the table
+            table = ax.table(cellText=cell_text, loc='center', cellLoc='center')
+            table.auto_set_font_size(False)
+            table.set_fontsize(10)
+            table.scale(1.2, 1.2)
+
+            # Apply bold formatting based on cell_text_format
+            for i, row in enumerate(cell_text_format):  # Iterate over data rows
+                for j, should_bold in enumerate(row):  # Iterate over each cell in the row
+                    if should_bold:
+                        # Get the cell from the table
+                        cell = table[(i, j)]
+                        # Set the font properties to bold
+                        cell.get_text().set_fontproperties(FontProperties(family='sans', weight='bold'))
+                        cell.get_text().set_fontweight('bold')
+                        cell.get_text().set_color('red')  # Change text color to red for testing
+                        cell.get_text().set_size(14)      # Increase text size for testing
+                        print('bolded', cell.get_text())
+            
+            plt.tight_layout()
+            plt.savefig(filename + ".png")
+            plt.close()
+        def create_and_save_table_checked(data, filename, title):
+            # Check data consistency
+            expected_columns = len(data[0])  # Assumes the first row is the header and has correct number of columns
+            for i, row in enumerate(data):
+                if len(row) != expected_columns:
+                    raise ValueError(f"Row {i} has incorrect length: {len(row)} elements (expected {expected_columns})")
+
+            # Create and save the table if data is consistent
+            create_and_save_table(data, filename, title)
+
+        # Create and save the TD table
+        create_and_save_table_checked(td_table_data, 'TD_Statistics', 'Typically Developing Subjects Statistics')
+
+        # Create and save the VM table
+        create_and_save_table_checked(vm_table_data, 'VM_Statistics', 'Ventriculomegaly Subjects Statistics')
+
+
+        # print("Problematic row data:", u_p_values_table_data[1])
+
+        # # Create and save the U & P Values table
+        # create_and_save_table_checked(u_p_values_table_data, 'U_P_Values', 'U & P Values')
+
+
+        # Print or handle the aggregated statistics as needed
+        for stat in all_stats:
+            print(f"{stat['View']} View:")
+            print(f"U Statistics (MSE, MAE, Anomaly): {stat['U_Stats']}")
+            print(f"P-values (MSE, MAE, Anomaly): {stat['P_Values']}")
+            print("\n")
+
+        
+
+        # Initialize table data with headers
+        table_data = [['View', 'U (MSE)', 'U (MAE)', 'U (Anomaly)', 'P (MSE)', 'P (MAE)', 'P (Anomaly)']]
+
+        # Populate the table data with your statistics
+        for stat in all_stats:
+            # Process each row's p-values
+            formatted_p_values = [format_p_value(p) for p in stat['P_Values']]
+            # Append the row to your table data
+            table_data.append([stat['View']] + stat['U_Stats'] + formatted_p_values)
+
+        create_and_save_table_checked(table_data, 'U_P_Values', 'U & P Values')
+
+        
+
+
+
+
+        # Combine data from all views into a single DataFrame
+        combined_df = pd.concat(view_data, ignore_index=True)
+
+        # Now, create your visualizations
+        # Transform data to long format for Altair
+        long_df = combined_df.melt(id_vars=['View', 'Class', 'Slide_ID'], 
+                                value_vars=['MSE', 'MAE', 'Anomaly'], 
+                                var_name='Metric', value_name='Value')
+
+        # Create violin plots for each metric, layered by view
+        violin_plots = alt.Chart(long_df).transform_density(
+            'Value',
+            as_=['Value', 'density'],
+            extent=[long_df['Value'].min(), long_df['Value'].max()],
+            groupby=['View', 'Metric']
+        ).mark_area(orient='horizontal').encode(
+            y=alt.Y('Value:Q'),
+            color=alt.Color('View:N', legend=alt.Legend(title="View")),
+            x=alt.X(
+                'density:Q',
+                stack='center',
+                axis=alt.Axis(labels=False, values=[0], grid=False, ticks=True),
+            ),
+            column=alt.Column('Metric:N', header=alt.Header(title="Mann-Whitney U Test"))
+        ).properties(
+            width=500,
+            height=500
+        )
+
+        # Save the violin plot
+        violin_plots.save(f'{self.val_path}layered_violin_plots.html')
+
+
 
     def multiview_AUROC_AS(self):
         from sklearn.metrics import roc_auc_score, roc_curve, auc

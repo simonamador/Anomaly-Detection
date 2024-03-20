@@ -13,13 +13,17 @@ class Framework(nn.Module):
         self.ga = ga
         self.method = method
         self.th = th
+        # print(f'{z_dim=}')
+        # print(f'{ga_n=}')
 
         self.anomap = Anomaly(device)
-        self.refineG = inpainting.InpaintGenerator().to(device)
-        self.refineD = inpainting.Discriminator().to(device)
+        # self.refineG = inpainting.InpaintGenerator().to(device)#BOE_size=0).to(device)
+        # self.refineD = inpainting.Discriminator().to(device)#BOE_size=0).to(device)
+        self.refineG = inpainting.InpaintGenerator(BOE_size=200).to(device)
+        self.refineD = inpainting.Discriminator(BOE_size=200).to(device)
 
         if ga:
-            #from models.ga_vae import Encoder, Decoder
+            # from models.ga_vae import Encoder, Decoder
             from models.SI_VAE import Encoder, Decoder
             self.encoder = Encoder(n, n, z_dim, method, model=model, ga_n=ga_n)
             self.decoder = Decoder(n, n, int(z_dim/2) + (ga_n if method in ['ordinal_encoding','one_hot_encoding', 'bpoe'] else 0))
@@ -46,19 +50,23 @@ class Framework(nn.Module):
         return y, {'z_mu': mu, 'z_logvar': logvar,'z': z, 'embeddings': embed_dict['embeddings']}
 
     def forward(self, x_im, x_ga = None):
-        if self.ga:
-            if x_ga is None:
-                raise NameError('Missing GA as input.')
-            else:
-                if self.method == 'bVAE':
-                    z, mu, log_var = self.encoder(x_im, x_ga)
-                else: 
-                    z = self.encoder(x_im, x_ga)
-        else:
-            if self.method == 'bVAE':
-                    z, mu, log_var = self.encoder(x_im)
-            else: 
-                z = self.encoder(x_im)
+        z, mu, logvar, embed_dict = self.encoder(x_im, x_ga)
+        # z = self.encoder(x_im, x_ga)
+        
+        
+        # if self.ga:
+        #     if x_ga is None:
+        #         raise NameError('Missing GA as input.')
+        #     else:
+        #         if self.method == 'bVAE':
+        #             z, mu, log_var = self.encoder(x_im, x_ga)
+        #         else: 
+        #             z = self.encoder(x_im, x_ga)
+        # else:
+        #     if self.method == 'bVAE':
+        #             z, mu, log_var = self.encoder(x_im)
+        #     else: 
+        #         z = self.encoder(x_im)
 
         x_recon = self.decoder(z)
         saliency, anom = self.anomap.anomaly(x_recon, x_im)
@@ -78,6 +86,6 @@ class Framework(nn.Module):
         y_fin = x_im * (1-masks) + masks * y_ref
 
         if self.method == "beta-VAE":
-            return y_fin, {"mu": mu, "log_var": log_var, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref}
+            return y_fin, {"mu": mu, "log_var": logvar, "x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref}
         else:
             return y_fin, {"x_recon": x_recon, "anom": anom, "mask": masks, "saliency": saliency, "x_ref": x_ref, "y_ref": y_ref, 'anom1':anom1}

@@ -207,7 +207,100 @@ class Style(nn.Module):
             style_loss += self.criterion(
                 self.compute_gram(x_vgg[f'relu{pre}_{pos}']), self.compute_gram(y_vgg[f'relu{pre}_{pos}']))
         return style_loss
+    
 
+
+# class GaussianBlur(nn.Module):
+#     r"""Creates an operator that blurs a tensor using a Gaussian filter.
+#     The operator smooths the given tensor with a gaussian kernel by convolving
+#     it to each channel. It suports batched operation.
+#     Arguments:
+#       kernel_size (Tuple[int, int]): the size of the kernel.
+#       sigma (Tuple[float, float]): the standard deviation of the kernel.
+#     Returns:
+#       Tensor: the blurred tensor.
+#     Shape:
+#       - Input: :math:`(B, C, H, W)`
+#       - Output: :math:`(B, C, H, W)`
+
+#     Examples::
+#       >>> input = torch.rand(2, 4, 5, 5)
+#       >>> gauss = kornia.filters.GaussianBlur((3, 3), (1.5, 1.5))
+#       >>> output = gauss(input)  # 2x4x5x5
+#     """
+
+#     def __init__(self, kernel_size, sigma):
+#         super(GaussianBlur, self).__init__()
+#         self.kernel_size = kernel_size
+#         self.sigma = sigma
+#         self._padding = self.compute_zero_padding(kernel_size)
+#         self.kernel = get_gaussian_kernel2d(kernel_size, sigma)
+
+#     @staticmethod
+#     def compute_zero_padding(kernel_size):
+#         """Computes zero padding tuple."""
+#         computed = [(k - 1) // 2 for k in kernel_size]
+#         return computed[0], computed[1]
+
+#     def forward(self, x):  # type: ignore
+#         if not torch.is_tensor(x):
+#             raise TypeError(
+#                 "Input x type is not a torch.Tensor. Got {}".format(type(x)))
+#         if not len(x.shape) == 4:
+#             raise ValueError(
+#                 "Invalid input shape, we expect BxCxHxW. Got: {}".format(x.shape))
+#         # prepare kernel
+#         b, c, h, w = x.shape
+#         tmp_kernel: torch.Tensor = self.kernel.to(x.device).to(x.dtype)
+#         kernel: torch.Tensor = tmp_kernel.repeat(c, 1, 1, 1)
+
+#         # TODO: explore solution when using jit.trace since it raises a warning
+#         # because the shape is converted to a tensor instead to a int.
+#         # convolve tensor with gaussian kernel
+#         return conv2d(x, kernel, padding=self._padding, stride=1, groups=c)
+
+
+# ######################
+# # functional interface
+# ######################
+
+# def gaussian_blur(input, kernel_size, sigma):
+#     r"""Function that blurs a tensor using a Gaussian filter.
+#     See :class:`~kornia.filters.GaussianBlur` for details.
+#     """
+#     return GaussianBlur(kernel_size, sigma)(input)
+
+
+# class smgan():
+#     def __init__(self, ksize=71): 
+#         self.ksize = ksize
+#         self.loss_fn = nn.MSELoss()
+    
+#     def __call__(self, netD, fake, real, masks, ga = None): 
+#         fake_detach = fake.detach()
+
+#         g_fake = netD(fake, ga)
+#         d_fake  = netD(fake_detach, ga)
+#         d_real = netD(real, ga)
+
+#         _, _, h, w = g_fake.size()
+#         b, c, ht, wt = masks.size()
+        
+#         # Handle inconsistent size between outputs and masks
+#         if h != ht or w != wt:
+#             g_fake = F.interpolate(g_fake, size=(ht, wt), mode='bilinear', align_corners=True)
+#             d_fake = F.interpolate(d_fake, size=(ht, wt), mode='bilinear', align_corners=True)
+#             d_real = F.interpolate(d_real, size=(ht, wt), mode='bilinear', align_corners=True)
+#         # d_fake_label = torch.Tensor(gaussian_filter(masks.cpu().detach().numpy(), sigma=1.2)).cuda()
+#         d_fake_label = gaussian_blur(masks, (self.ksize, self.ksize), (10, 10)).detach().cuda()
+#         d_real_label = torch.zeros_like(d_real).cuda()
+#         g_fake_label = torch.ones_like(g_fake).cuda()
+
+#         dis_loss = self.loss_fn(d_fake, d_fake_label) + self.loss_fn(d_real, d_real_label)
+#         gen_loss = self.loss_fn(g_fake, g_fake_label) * masks / torch.mean(masks)
+
+#         return dis_loss.mean(), gen_loss.mean()
+    
 class smgan():
     def __init__(self): 
         self.loss_fn = nn.MSELoss()

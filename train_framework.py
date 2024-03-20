@@ -15,6 +15,8 @@ from utils.debugging_printers import *
 class Trainer:
     
     def __init__ (self,parameters):
+        from pprint import pprint
+        pprint(parameters)
         
         # Determine if model inputs GA
         if parameters['VAE_model_type'] == 'ga_VAE':
@@ -39,24 +41,24 @@ class Trainer:
 
         # Generate model
         self.model = Framework(parameters['slice_size'], parameters['z_dim'], 
-                               parameters['method'], parameters['device'], 
-                               parameters['model'], parameters['ga'], 
+                               parameters['ga_method'], parameters['device'], 
+                               parameters['type'], self.ga, 
                                parameters['ga_n'], th=self.th)
 
         # Load pre-trained parameters
         if parameters['pretrained'] == 'base':
             encoder, decoder = load_model(parameters['pretrained_path'], parameters['base'], 
-                                          parameters['method'], parameters['slice_size'], 
+                                          parameters['ga_method'], parameters['slice_size'], 
                                           parameters['slice_size'], parameters['z_dim'], 
-                                          model=parameters['model'], pre = parameters['pretrained'], 
+                                          model=parameters['type'], pre = parameters['pretrained'], 
                                           ga_n = parameters['ga_n'])
             self.model.encoder = encoder
             self.model.decoder = decoder
         if parameters['pretrained'] == 'refine':
             refineG, refineD = load_model(parameters['pretrained_path'], parameters['base'], 
-                                          parameters['method'], parameters['slice_size'],
+                                          parameters['ga_method'], parameters['slice_size'],
                                           parameters['slice_size'], parameters['z_dim'], 
-                                          model=parameters['model'], pre = parameters['pretrained'],
+                                          model=parameters['type'], pre = parameters['pretrained'],
                                           ga_n = parameters['ga_n'])
             self.model.refineG = refineG
             self.model.refineD = refineD
@@ -79,7 +81,7 @@ class Trainer:
 
         # Establish data loaders
         train_dl, val_dl = loader(parameters['source_path'], parameters['view'], 
-                                  parameters['batch'], parameters['z_dim'], 
+                                  parameters['batch'], parameters['slice_size'], 
                                   raw = parameters['raw'])
         self.loader = {"tr": train_dl, "ts": val_dl}
         prGreen('Data loaders successfully loaded...')
@@ -197,7 +199,7 @@ class Trainer:
                     for name, weight in self.loss_keys.items():
                         losses[name] = weight * self.losses[name](y_ref, img)
 
-                    dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks)
+                    dis_loss, gen_loss = self.adv_loss(self.model.refineD, ref_recon, img, masks, ga)
 
                     # No se incluye en el entrenamiento de SAPI.
                     losses['advg'] = gen_loss * self.adv_weight

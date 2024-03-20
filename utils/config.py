@@ -103,6 +103,31 @@ class img_dataset(Dataset):
         result = np.zeros(target)
         result[tuple(slices)] = img
         return result
+
+    import operator
+
+    def clip_and_resize(self, img, n, percentile=50):
+        
+        
+        
+        # Continue with the existing resizing process
+        target = (n, n)
+        if (img.shape > np.array(target)).any():
+            target_shape2 = np.min([target, img.shape], axis=0)
+            start = tuple(map(lambda a, da: a//2 - da//2, img.shape, target_shape2))
+            end = tuple(map(operator.add, start, target_shape2))
+            slices = tuple(map(slice, start, end))
+            img = img[tuple(slices)]
+        offset = tuple(map(lambda a, da: a//2 - da//2, target, img.shape))
+        slices = [slice(offset[dim], offset[dim] + img.shape[dim]) for dim in range(img.ndim)]
+        result = np.zeros(target)
+        result[tuple(slices)] = img
+        # Calculate the threshold intensity for the specified percentile
+        threshold = np.percentile(result, percentile)
+        
+        # Set all pixels below this threshold to zero
+        result[result < threshold] = 0
+        return result
     
     def adjust_image(self, img, target_size):
         from scipy.ndimage import center_of_mass, shift
@@ -158,11 +183,11 @@ class img_dataset(Dataset):
         ga = self.extract_age()
 
         if self.view == 'L':
-            n_img = self.resizing(raw[idx,:,:], self.size)    
+            n_img = self.clip_and_resize(raw[idx,:,:], self.size)    
         elif self.view == 'A':
-            n_img = self.resizing(raw[:,idx,:], self.size)
+            n_img = self.clip_and_resize(raw[:,idx,:], self.size)
         else:
-            n_img = self.resizing(raw[:,:,idx], self.size)
+            n_img = self.clip_and_resize(raw[:,:,idx], self.size)
     
         n_img = self.normalize_95(n_img)
 
@@ -257,7 +282,8 @@ def val_loader(val_path, images, view, data='healthy', raw=False):
 def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = False, ga_n = 100):
     prCyan(f'{ga_method=}')
     if base == 'ga_VAE':
-        from models.ga_vae import Encoder, Decoder
+        # from models.ga_vae import Encoder, Decoder
+        from models.SI_VAE import Encoder, Decoder
         encoder = Encoder(h, w, z_dim, method = ga_method, model = model, ga_n = ga_n)
     else:
         from models.vae import Encoder, Decoder
@@ -266,15 +292,19 @@ def load_model(model_path, base, ga_method, w, h, z_dim, model='default', pre = 
 
     cpe = torch.load(model_path+'encoder_best.pth', map_location=torch.device('cpu'))
     cpd = torch.load(model_path+'decoder_best.pth', map_location=torch.device('cpu'))
+    # cpe = torch.load(model_path+'encoder_latest.pth', map_location=torch.device('cpu'))
+    # cpd = torch.load(model_path+'decoder_latest.pth', map_location=torch.device('cpu'))
 
     cpe_new = OrderedDict()
     cpd_new = OrderedDict()
 
     import models.aotgan.aotgan as inpainting
-    refineG = inpainting.InpaintGenerator()
-    refineD = inpainting.Discriminator()
-    cp_refG = torch.load(model_path+'refineG_best.pth', map_location=torch.device('cpu'))
-    cp_refD = torch.load(model_path+'refineD_best.pth', map_location=torch.device('cpu'))
+    refineG = inpainting.InpaintGenerator(BOE_size=200)#BOE_size=0)
+    refineD = inpainting.Discriminator(BOE_size=200)#BOE_size=0)
+    # cp_refG = torch.load(model_path+'refineG_best.pth', map_location=torch.device('cpu'))
+    # cp_refD = torch.load(model_path+'refineD_best.pth', map_location=torch.device('cpu'))
+    cp_refG = torch.load(model_path+'refineG_latest.pth', map_location=torch.device('cpu'))
+    cp_refD = torch.load(model_path+'refineD_latest.pth', map_location=torch.device('cpu'))
 
     cp_refG_new = OrderedDict()
     cp_refD_new = OrderedDict()
@@ -341,7 +371,7 @@ def path_generator(args):
         os.mkdir(model_path)
         os.mkdir(image_path)
 
-    if (args.pre) and (not os.path.exists(pre_path)):
+    if (args.pretrained) and (not os.path.exists(pre_path)):
         print(pre_path)
         raise NameError("model_path for pretraining is not correct.")
 
@@ -433,14 +463,6 @@ def settings_parser():
         help='''
         Number of batch size.
         ''') 
-    parser.add_argument('--beta',
-        dest='beta',
-        type=float,
-        default=None,
-        required=False,
-        help='''
-        The value of the beta parameter.
-        ''')
     parser.add_argument('--z_dim',
         dest='z_dim',
         type=int,
@@ -450,7 +472,7 @@ def settings_parser():
         z dimension.
         ''')
     parser.add_argument('--pretrained',
-        dest='pre',
+        dest='pretrained',
         type=str,
         default=None,
         choices=['base','refine'],
@@ -545,5 +567,30 @@ def settings_parser():
         help='''
         BOE implemented to the GD as a cGAN.
         ''')
+    parser.add_argument('--beta_kl',
+        dest='beta_kl',
+        type=float,
+        default=None,
+        required=False,
+        help='''
+        The value of the beta KL parameter.
+        ''')
+    parser.add_argument('--beta_rec',
+        dest='beta_rec',
+        type=float,
+        default=None,
+        required=False,
+        help='''
+        The value of the beta rec parameter.
+        ''')
+    parser.add_argument('--beta_neg',
+        dest='beta_kl',
+        type=float,
+        default=None,
+        required=False,
+        help='''
+        The value of the beta neg parameter.
+        ''')
+    
 
     return parser

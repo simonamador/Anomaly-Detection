@@ -21,7 +21,7 @@ def create_bi_partitioned_ordinal_vector(gas, size):
         threshold_index = size//2
         device = gas.device
         batch_size = gas.size(0)
-        ga_indices = calculate_ga_index(gas)
+        ga_indices = calculate_ga_index(gas, size)
         vectors = torch.full((batch_size, size), -1, device=device)  # Default fill with -1
 
         for i in range(batch_size):
@@ -73,19 +73,6 @@ class InpaintGenerator(BaseNetwork):
         )
 
         self.init_weights()
-
-    # ======== PREVIOUS VERSION ========
-    # def forward(self, x, mask, ga=None):
-    #     x = torch.cat([x, mask], dim=1)
-    #     # print(x.shape)
-    #     x = self.encoder(x)
-    #     # print(x.shape)
-    #     x = self.middle(x) # Add BOE here TODO
-    #     # print(x.shape)
-    #     x = self.decoder(x)
-    #     # print(x.shape)
-    #     x = torch.tanh(x)
-    #     return x
 
     def forward(self, x, mask, ga=None):
         x = torch.cat([x, mask], dim=1)  # Combine image and mask
@@ -156,10 +143,15 @@ def my_layer_norm(feat):
 class Discriminator(BaseNetwork):
     def __init__(self,  BOE_size=0):
         super(Discriminator, self).__init__()
-        inc = 1
         self.BOE_size = BOE_size
+        self.inc = 1  # Assuming grayscale images, change if different
+        # Additional layers for processing GA
+        self.ga_embedding = nn.Linear(self.BOE_size, 158 * 158)  # Project GA into a space that can be reshaped into a spatial form
+        self.ga_conv = nn.Conv2d(1, 64, 3, stride=1, padding=1)  # Convolve GA to integrate into image features
+        
+        # Original conv layers
         self.conv = nn.Sequential(
-            spectral_norm(nn.Conv2d(inc, 64, 4, stride=2, padding=1, bias=False)),
+            spectral_norm(nn.Conv2d(self.inc + 64, 64, 4, stride=2, padding=1, bias=False)),  # Adjust input channels
             nn.LeakyReLU(0.2, inplace=True),
             spectral_norm(nn.Conv2d(64, 128, 4, stride=2, padding=1, bias=False)),
             nn.LeakyReLU(0.2, inplace=True),
@@ -172,18 +164,20 @@ class Discriminator(BaseNetwork):
 
         self.init_weights()
 
-    # ======== PREVIOUS VERSION ========
-    # def forward(self, x):
-    #     feat = self.conv(x)
-    #     return feat
-
     def forward(self, x, ga=None):
+        # If GA is provided, process and integrate it
         if ga is not None:
-            # Encode GA using the same function as in the generator
-            encoded_ga = create_bi_partitioned_ordinal_vector(ga, self.size)
-            # Expand GA to match feature dimensions and concatenate
-            encoded_ga_expanded = encoded_ga.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, x.size(2), x.size(3))
-            x = torch.cat([x, encoded_ga_expanded], dim=1)
+            # Encode GA and reshape into spatial dimensions
+            encoded_ga = create_bi_partitioned_ordinal_vector(ga, self.BOE_size)
+            encoded_ga = encoded_ga.float() # Convert encoded GA to float dtype to match layer weights
+            # Project encoded GA to match discriminator feature map size and reshape
+            encoded_ga = self.ga_embedding(encoded_ga)  # Embed GA into a larger space
+            encoded_ga = encoded_ga.view(-1, 1, 158, 158)  # Reshape to form a single-channel spatial map
+            encoded_ga = F.relu(self.ga_conv(encoded_ga))  # Convolve the GA map to integrate into image feature dimensions
+            
+            # Concatenate the GA map with the input image
+            x = torch.cat([x, encoded_ga], dim=1)  # Combine along channel dimension
 
-        feat = self.conv(x)
-        return feat
+        # Process through convolutional layers
+        img_features = self.conv(x)
+        return img_features
